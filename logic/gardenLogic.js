@@ -1,6 +1,6 @@
-const flowerDB = require("../data/flowerDB");
-const Flower = require("../models/Flower");
-const Message = require("../models/Message");
+import flowerDB from "../data/flowerDB.js";
+import Flower from "../models/Flower.js";
+import Message from "../models/Message.js";
 
 function getNonOverlappingPosition(existingFlowers) {
   const gardenWidth = 700;
@@ -54,8 +54,4 @@ function addMessage(flower, author, text) {
   return flower;
 }
 
-module.exports = {
-  createFlower,
-  addSupport,
-  addMessage
-};
+export { createFlower, addSupport, addMessage };

@@ -121,7 +121,7 @@ function renderVisitRecords() {
 
     item.innerHTML = `
       <p><strong>${record.visitorAvatar} ${record.visitorName}</strong> ${record.action}</p>
-      <p>${record.time}</p>
+      <p>${new Date(record.createdAt).toLocaleString()}</p>
     `;
 
     recordsDiv.appendChild(item);
@@ -245,17 +245,23 @@ async function refreshSocialPanels() {
 }
 
 function startPolling() {
-  stopPolling();
-
-  pollTimer = setInterval(async () => {
-    try {
-      await refreshCurrentView();
-      await refreshSocialPanels();
-    } catch (err) {
-      console.error("Polling error:", err);
-    }
-  }, POLL_INTERVAL);
-}
+    stopPolling();
+  
+    pollTimer = setInterval(async () => {
+      try {
+        if (viewMode === "friend") {
+          const viewedGarden = await fetchGarden(currentVisitedFriendId);
+          applyViewedGardenData(viewedGarden);
+  
+          if (typeof checkNearbyFlower === "function") {
+            checkNearbyFlower();
+          }
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    }, POLL_INTERVAL);
+  }
 
 function stopPolling() {
   if (pollTimer) {
@@ -634,49 +640,53 @@ function setupSubmitButton() {
     }
   });
 }
-
 function setupVisitorChoices() {
-  const visitorButtons = document.querySelectorAll(".visitor-choice");
-  const selectedVisitorText = document.getElementById("selectedVisitorText");
-
-  visitorButtons.forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const avatar = btn.dataset.avatar;
-
-      setVisitorAvatar(avatar);
-
-      visitorButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      if (selectedVisitorText) {
-        selectedVisitorText.textContent = `Current form: ${avatar}`;
-      }
-
-      if (viewMode === "friend" && currentVisitedFriendId) {
-        try {
-          await moveVisit(currentVisitedFriendId, getCurrentUserId(), avatarX, avatarY);
-        } catch (err) {
-          console.error("Avatar update move error:", err);
+    const visitorButtons = document.querySelectorAll(".visitor-choice");
+    const selectedVisitorText = document.getElementById("selectedVisitorText");
+  
+    visitorButtons.forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const avatar = btn.dataset.avatar;
+  
+        setVisitorAvatar(avatar);
+  
+        visitorButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+  
+        if (selectedVisitorText) {
+          selectedVisitorText.textContent = `Current form: ${avatar}`;
         }
-
-        if (typeof createVisitorAvatar === "function") {
-          createVisitorAvatar();
-          checkNearbyFlower();
+  
+        if (viewMode === "friend" && currentVisitedFriendId) {
+          if (!avatarEl && typeof createVisitorAvatar === "function") {
+            createVisitorAvatar();
+          }
+  
+          if (avatarEl) {
+            avatarEl.textContent = avatar;
+          }
+  
+          try {
+            await moveVisit(currentVisitedFriendId, getCurrentUserId(), avatarX, avatarY);
+          } catch (err) {
+            console.error("Avatar update move error:", err);
+          }
+  
+          if (typeof checkNearbyFlower === "function") {
+            checkNearbyFlower();
+          }
         }
-      }
+      });
     });
-  });
-
-  if (visitorButtons.length > 0) {
+  
     const defaultBtn = Array.from(visitorButtons).find(
-      (btn) => btn.dataset.avatar === "🦋"
+      (btn) => btn.dataset.avatar === getSelectedVisitorAvatar()
     );
-
+  
     if (defaultBtn) {
       defaultBtn.classList.add("active");
     }
   }
-}
 
 function setupGardenSwitchButtons() {
   const backMyGardenBtn = document.getElementById("backMyGardenBtn");

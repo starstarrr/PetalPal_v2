@@ -6,67 +6,97 @@ let activeFlowerId = null;
 let gardenClickMoveBound = false;
 
 async function leaveMessage(index) {
-  const msg = prompt("Leave a blessing message 🌸");
-
-  if (!msg || !msg.trim()) {
-    return;
-  }
-
-  const flower = currentGardenView[index];
-  if (!flower) {
-    return;
-  }
-
-  const targetUserId =
-    viewMode === "friend" ? currentVisitedFriendId : getCurrentUserId();
-
-  try {
-    const me = getCurrentUser();
-
-    await messageFlowerForUser(
-      targetUserId,
-      flower.id,
-      me ? me.name : "Friend",
-      msg.trim()
-    );
-
-    await refreshCurrentView();
-    renderTodayFlower(index);
-
-    if (friendMode) {
-      createVisitorAvatar();
-      checkNearbyFlower();
+    const msg = prompt("Leave a blessing message 🌸");
+  
+    if (!msg || !msg.trim()) return;
+  
+    const flower = currentGardenView[index];
+    if (!flower) return;
+  
+    const targetUserId =
+      viewMode === "friend" ? currentVisitedFriendId : getCurrentUserId();
+  
+    try {
+      const me = getCurrentUser();
+  
+      await messageFlowerForUser(
+        targetUserId,
+        flower.id,
+        me ? me.name : "Friend",
+        msg.trim()
+      );
+  
+      if (!flower.messages) {
+        flower.messages = [];
+      }
+  
+      flower.messages.push({
+        text: msg.trim(),
+        sender: me ? me.name : "Friend"
+      });
+  
+      renderGarden();
+      renderTodayFlower();
+  
+      if (friendMode) {
+        checkNearbyFlower();
+      }
+    } catch (err) {
+      console.error("Message error:", err);
+      alert("Failed to leave message");
     }
-  } catch (err) {
-    console.error("Message error:", err);
-    alert("Failed to leave message");
   }
-}
 
 async function supportFlower(index) {
-  const flower = currentGardenView[index];
-  if (!flower) {
-    return;
-  }
-
-  const targetUserId =
-    viewMode === "friend" ? currentVisitedFriendId : getCurrentUserId();
-
-  try {
-    await supportFlowerForUser(targetUserId, flower.id);
-
-    await refreshCurrentView();
-    renderTodayFlower(index);
-
-    if (friendMode) {
-      createVisitorAvatar();
-      checkNearbyFlower();
+    const flower = currentGardenView[index];
+    if (!flower) return;
+  
+    const targetUserId =
+      viewMode === "friend" ? currentVisitedFriendId : getCurrentUserId();
+  
+    const oldCount = Number(flower.supportCount || 0);
+    const optimisticCount = oldCount + 1;
+  
+    
+    flower.supportCount = optimisticCount;
+    currentGardenView[index].supportCount = optimisticCount;
+  
+    renderGarden();
+    renderTodayFlower();
+  
+    try {
+      const updatedFlower = await supportFlowerForUser(targetUserId, flower.id);
+  
+      console.log("updatedFlower =", updatedFlower);
+  
+      const realCount =
+        updatedFlower && typeof updatedFlower.supportCount === "number"
+          ? updatedFlower.supportCount
+          : optimisticCount;
+  
+    
+      if (realCount !== optimisticCount) {
+        flower.supportCount = realCount;
+        currentGardenView[index].supportCount = realCount;
+  
+        renderGarden();
+        renderTodayFlower();
+      }
+  
+      if (friendMode) {
+        checkNearbyFlower();
+      }
+    } catch (err) {
+      flower.supportCount = oldCount;
+      currentGardenView[index].supportCount = oldCount;
+  
+      renderGarden();
+      renderTodayFlower();
+  
+      console.error("Support error:", err);
+      alert("Failed to support flower");
     }
-  } catch (err) {
-    console.error("Support error:", err);
-    alert("Failed to support flower");
   }
-}
 
 async function deleteFlower(index) {
   const flower = currentGardenView[index];
@@ -295,6 +325,14 @@ function setupFriendFlowerActions() {
 }
 
 function handleKeydown(e) {
+    if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight"
+      ) {
+        e.preventDefault();   
+      }
   if (!friendMode) {
     return;
   }

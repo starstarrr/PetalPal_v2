@@ -1,12 +1,14 @@
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const { createFlower, addSupport, addMessage } = require("./logic/gardenLogic");
-const VisitRecord = require("./models/VisitRecord");
-const User = require("./models/User");
-const users = require("./data/users");
-const { predictMood, loadMoodModel } = require("./moodClassifier");
+import prisma from "./lib/prisma.js";
+import { createFlower } from "./logic/gardenLogic.js";
+import { predictMood, loadMoodModel } from "./moodClassifier.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
@@ -15,32 +17,97 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-function getUser(userId) {
-  return users[userId] || null;
+const activeVisitorsByGarden = {};
+ 
+function getActiveVisitors(gardenId) {
+  return activeVisitorsByGarden[gardenId] || [];
 }
 
-function getFriendList(user) {
-  return user
-    .getFriendIds()
-    .map((friendId) => getUser(friendId))
-    .filter(Boolean)
-    .map((friend) => ({
-      id: friend.id,
-      name: friend.name,
-      avatar: friend.avatar
-    }));
+function setActiveVisitors(gardenId, visitors) {
+  activeVisitorsByGarden[gardenId] = visitors;
 }
 
-function getGardenResponse(user) {
+async function getUser(userId) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      garden: {
+        include: {
+          flowers: {
+            include: {
+              messages: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+          visitRecords: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 30,
+          },
+        },
+      },
+    },
+  });
+}
+
+async function ensureGarden(userId) {
+  let garden = await prisma.garden.findUnique({
+    where: { ownerId: userId },
+  });
+
+  if (!garden) {
+    garden = await prisma.garden.create({
+      data: {
+        ownerId: userId,
+        year: new Date().getFullYear(),
+      },
+    });
+  }
+
+  return garden;
+}
+
+async function getGardenResponse(userId) {
+  const user = await getUser(userId);
+
+  if (!user) {
+    return null;
+  }
+
+  const garden = user.garden || (await ensureGarden(user.id));
+
+  const fullGarden = await prisma.garden.findUnique({
+    where: { id: garden.id },
+    include: {
+      flowers: {
+        include: {
+          messages: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+      visitRecords: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 30,
+      },
+    },
+  });
+
   return {
     owner: {
       id: user.id,
       name: user.name,
-      avatar: user.avatar
+      avatar: user.avatar,
     },
-    flowers: user.getGarden().getFlowers(),
-    visitRecords: user.getGarden().getVisitRecords(),
-    activeVisitors: user.getGarden().getActiveVisitors()
+    flowers: fullGarden.flowers,
+    visitRecords: fullGarden.visitRecords,
+    activeVisitors: getActiveVisitors(fullGarden.id),
   };
 }
 
@@ -48,324 +115,631 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.get("/users", (req, res) => {
-  const result = Object.values(users).map((user) => ({
-    id: user.id,
-    name: user.name,
-    avatar: user.avatar
-  }));
+app.get("/users", async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
 
-  res.json(result);
+    res.json(users);
+  } catch (err) {
+    console.error("GET /users error:", err);
+    res.status(500).json({ error: "Failed to get users" });
+  }
 });
 
-app.get("/users/:userId", (req, res) => {
-  const user = getUser(req.params.userId);
+app.get("/users/:userId", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+      include: {
+        friends: true,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar,
+      friends: user.friends.map((friendship) => friendship.friendId),
+    });
+  } catch (err) {
+    console.error("GET /users/:userId error:", err);
+    res.status(500).json({ error: "Failed to get user" });
   }
-
-  res.json({
-    id: user.id,
-    name: user.name,
-    avatar: user.avatar,
-    friends: user.getFriendIds()
-  });
 });
 
-app.get("/users/:userId/friends", (req, res) => {
-  const user = getUser(req.params.userId);
+app.get("/users/:userId/friends", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        userId: user.id,
+      },
+      include: {
+        friend: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+
+    res.json(friendships.map((item) => item.friend));
+  } catch (err) {
+    console.error("GET /users/:userId/friends error:", err);
+    res.status(500).json({ error: "Failed to get friends" });
   }
-
-  res.json(getFriendList(user));
 });
 
-app.get("/users/:userId/garden", (req, res) => {
-  const user = getUser(req.params.userId);
+app.get("/users/:userId/garden", async (req, res) => {
+  try {
+    const gardenResponse = await getGardenResponse(req.params.userId);
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!gardenResponse) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(gardenResponse);
+  } catch (err) {
+    console.error("GET /users/:userId/garden error:", err);
+    res.status(500).json({ error: "Failed to get garden" });
   }
-
-  res.json(getGardenResponse(user));
 });
 
-app.post("/users", (req, res) => {
-  const { name, avatar } = req.body;
+app.post("/users", async (req, res) => {
+  try {
+    const { name, avatar } = req.body;
 
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: "Name is required" });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    const trimmedName = name.trim();
+
+    const nameExists = await prisma.user.findFirst({
+      where: {
+        name: {
+          equals: trimmedName,
+          mode: "insensitive",
+        },
+      },
+    });
+
+    if (nameExists) {
+      return res.status(400).json({ error: "Name already exists" });
+    }
+
+    const newUserId = `user_${Date.now()}`;
+
+    const newUser = await prisma.user.create({
+      data: {
+        id: newUserId,
+        name: trimmedName,
+        avatar: avatar || "🦋",
+        garden: {
+          create: {
+            year: new Date().getFullYear(),
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      id: newUser.id,
+      name: newUser.name,
+      avatar: newUser.avatar,
+      friends: [],
+    });
+  } catch (err) {
+    console.error("POST /users error:", err);
+    res.status(500).json({ error: "Failed to create user" });
   }
-
-  const trimmedName = name.trim();
-
-  const nameExists = Object.values(users).some(
-    (user) => user.name.toLowerCase() === trimmedName.toLowerCase()
-  );
-
-  if (nameExists) {
-    return res.status(400).json({ error: "Name already exists" });
-  }
-
-  const newUserId = `user_${Date.now()}`;
-
-  const newUser = new User({
-    id: newUserId,
-    name: trimmedName,
-    avatar: avatar || "🦋",
-    friends: []
-  });
-
-  users[newUserId] = newUser;
-
-  res.status(201).json({
-    id: newUser.id,
-    name: newUser.name,
-    avatar: newUser.avatar,
-    friends: newUser.getFriendIds()
-  });
 });
 
-app.post("/friends/add", (req, res) => {
-  const { userId, friendId } = req.body;
+app.post("/friends/add", async (req, res) => {
+  try {
+    const { userId, friendId } = req.body;
 
-  const user = getUser(userId);
-  const friend = getUser(friendId);
+    if (userId === friendId) {
+      return res.status(400).json({ error: "You cannot add yourself" });
+    }
 
-  if (!user || !friend) {
-    return res.status(404).json({ error: "User not found" });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const friend = await prisma.user.findUnique({ where: { id: friendId } });
+
+    if (!user || !friend) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await prisma.friendship.upsert({
+      where: {
+        userId_friendId: {
+          userId,
+          friendId,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        friendId,
+      },
+    });
+
+    await prisma.friendship.upsert({
+      where: {
+        userId_friendId: {
+          userId: friendId,
+          friendId: userId,
+        },
+      },
+      update: {},
+      create: {
+        userId: friendId,
+        friendId: userId,
+      },
+    });
+
+    const userFriends = await prisma.friendship.findMany({
+      where: { userId },
+      select: { friendId: true },
+    });
+
+    const friendFriends = await prisma.friendship.findMany({
+      where: { userId: friendId },
+      select: { friendId: true },
+    });
+
+    res.json({
+      success: true,
+      message: "Friend added successfully",
+      userFriends: userFriends.map((item) => item.friendId),
+      friendFriends: friendFriends.map((item) => item.friendId),
+    });
+  } catch (err) {
+    console.error("POST /friends/add error:", err);
+    res.status(500).json({ error: "Failed to add friend" });
   }
-
-  if (userId === friendId) {
-    return res.status(400).json({ error: "You cannot add yourself" });
-  }
-
-  user.addFriend(friendId);
-  friend.addFriend(userId);
-
-  res.json({
-    success: true,
-    message: "Friend added successfully",
-    userFriends: user.getFriendIds(),
-    friendFriends: friend.getFriendIds()
-  });
 });
 
-app.post("/friends/remove", (req, res) => {
-  const { userId, friendId } = req.body;
+app.post("/friends/remove", async (req, res) => {
+  try {
+    const { userId, friendId } = req.body;
 
-  const user = getUser(userId);
-  const friend = getUser(friendId);
+    await prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { userId, friendId },
+          { userId: friendId, friendId: userId },
+        ],
+      },
+    });
 
-  if (!user || !friend) {
-    return res.status(404).json({ error: "User not found" });
+    res.json({
+      success: true,
+      message: "Friend removed successfully",
+      userFriends: [],
+      friendFriends: [],
+    });
+  } catch (err) {
+    console.error("POST /friends/remove error:", err);
+    res.status(500).json({ error: "Failed to remove friend" });
   }
-
-  user.friends = user.friends.filter((id) => id !== friendId);
-  friend.friends = friend.friends.filter((id) => id !== userId);
-
-  res.json({
-    success: true,
-    message: "Friend removed successfully",
-    userFriends: user.getFriendIds(),
-    friendFriends: friend.getFriendIds()
-  });
 });
 
-app.post("/users/:userId/flowers", (req, res) => {
-  const user = getUser(req.params.userId);
+app.post("/users/:userId/flowers", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { mood, event } = req.body;
+
+    if (!mood) {
+      return res.status(400).json({ error: "Mood is required" });
+    }
+
+    const garden = await ensureGarden(user.id);
+
+    const existingFlowers = await prisma.flower.findMany({
+      where: {
+        gardenId: garden.id,
+      },
+    });
+
+    const tempFlower = createFlower(mood, event, existingFlowers);
+
+    const flower = await prisma.flower.create({
+      data: {
+        mood: tempFlower.mood,
+        event: tempFlower.event || "",
+        name: tempFlower.name,
+        meaning: tempFlower.meaning,
+        img: tempFlower.img,
+        left: tempFlower.left,
+        top: tempFlower.top,
+        supportCount: 0,
+        userId: user.id,
+        gardenId: garden.id,
+      },
+      include: {
+        messages: true,
+      },
+    });
+
+    res.status(201).json(flower);
+  } catch (err) {
+    console.error("POST /users/:userId/flowers error:", err);
+    res.status(500).json({ error: "Failed to create flower" });
   }
-
-  const { mood, event } = req.body;
-
-  if (!mood) {
-    return res.status(400).json({ error: "Mood is required" });
-  }
-
-  const garden = user.getGarden();
-  const flower = createFlower(mood, event, garden.getFlowers());
-
-  garden.addFlower(flower);
-
-  res.status(201).json(flower);
 });
 
-app.post("/users/:userId/flowers/:flowerId/support", (req, res) => {
-  const user = getUser(req.params.userId);
-  const flowerId = Number(req.params.flowerId);
+app.post("/users/:userId/flowers/:flowerId/support", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const flower = await prisma.flower.findFirst({
+      where: {
+        id: req.params.flowerId,
+        userId: user.id,
+      },
+    });
+
+    if (!flower) {
+      return res.status(404).json({ error: "Flower not found" });
+    }
+
+    const updatedFlower = await prisma.flower.update({
+      where: {
+        id: flower.id,
+      },
+      data: {
+        supportCount: {
+          increment: 1,
+        },
+      },
+      include: {
+        messages: true,
+      },
+    });
+
+    res.json(updatedFlower);
+  } catch (err) {
+    console.error("POST /support error:", err);
+    res.status(500).json({ error: "Failed to support flower" });
   }
-
-  const flower = user.getGarden().getFlowerById(flowerId);
-
-  if (!flower) {
-    return res.status(404).json({ error: "Flower not found" });
-  }
-
-  addSupport(flower);
-  res.json(flower);
 });
 
-app.post("/users/:userId/flowers/:flowerId/message", (req, res) => {
-  const user = getUser(req.params.userId);
-  const flowerId = Number(req.params.flowerId);
-  const { author, text } = req.body;
+app.post("/users/:userId/flowers/:flowerId/message", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { author, text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Message cannot be empty" });
+    }
+
+    const flower = await prisma.flower.findFirst({
+      where: {
+        id: req.params.flowerId,
+        userId: user.id,
+      },
+    });
+
+    if (!flower) {
+      return res.status(404).json({ error: "Flower not found" });
+    }
+
+    await prisma.message.create({
+      data: {
+        author: author || "Friend",
+        text: text.trim(),
+        flowerId: flower.id,
+        userId: user.id,
+      },
+    });
+
+    const updatedFlower = await prisma.flower.findUnique({
+      where: {
+        id: flower.id,
+      },
+      include: {
+        messages: true,
+      },
+    });
+
+    res.json(updatedFlower);
+  } catch (err) {
+    console.error("POST /message error:", err);
+    res.status(500).json({ error: "Failed to add message" });
   }
-
-  const flower = user.getGarden().getFlowerById(flowerId);
-
-  if (!flower) {
-    return res.status(404).json({ error: "Flower not found" });
-  }
-
-  if (!text || !text.trim()) {
-    return res.status(400).json({ error: "Message cannot be empty" });
-  }
-
-  addMessage(flower, author || "Friend", text.trim());
-  res.json(flower);
 });
 
-app.delete("/users/:userId/flowers/:flowerId", (req, res) => {
-  const user = getUser(req.params.userId);
-  const flowerId = Number(req.params.flowerId);
+app.delete("/users/:userId/flowers/:flowerId", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.params.userId,
+      },
+    });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const flower = await prisma.flower.findFirst({
+      where: {
+        id: req.params.flowerId,
+        userId: user.id,
+      },
+    });
+
+    if (!flower) {
+      return res.status(404).json({ error: "Flower not found" });
+    }
+
+    await prisma.message.deleteMany({
+      where: {
+        flowerId: flower.id,
+      },
+    });
+
+    const removedFlower = await prisma.flower.delete({
+      where: {
+        id: flower.id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Flower deleted successfully",
+      deletedFlower: removedFlower,
+    });
+  } catch (err) {
+    console.error("DELETE /flowers error:", err);
+    res.status(500).json({ error: "Failed to delete flower" });
   }
-
-  const garden = user.getGarden();
-  const flower = garden.getFlowerById(flowerId);
-
-  if (!flower) {
-    return res.status(404).json({ error: "Flower not found" });
-  }
-
-  const removedFlower = garden.removeFlowerById(flowerId);
-
-  res.json({
-    success: true,
-    message: "Flower deleted successfully",
-    deletedFlower: removedFlower
-  });
 });
 
-app.post("/visit", (req, res) => {
-  const {
-    hostUserId,
-    visitorUserId,
-    visitorAvatar,
-    x = 120,
-    y = 520
-  } = req.body;
+app.post("/visit", async (req, res) => {
+  try {
+    const {
+      hostUserId,
+      visitorUserId,
+      visitorAvatar,
+      x = 120,
+      y = 520,
+    } = req.body;
 
-  const host = getUser(hostUserId);
-  const visitor = getUser(visitorUserId);
+    const host = await prisma.user.findUnique({
+      where: {
+        id: hostUserId,
+      },
+    });
 
-  if (!host || !visitor) {
-    return res.status(404).json({ error: "User not found" });
+    const visitor = await prisma.user.findUnique({
+      where: {
+        id: visitorUserId,
+      },
+    });
+
+    if (!host || !visitor) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const hostGarden = await ensureGarden(host.id);
+
+    const visitors = getActiveVisitors(hostGarden.id);
+    const existing = visitors.find((item) => item.visitorId === visitor.id);
+
+    if (existing) {
+      existing.x = x;
+      existing.y = y;
+      existing.avatar = visitorAvatar || visitor.avatar;
+      existing.name = visitor.name;
+    } else {
+      visitors.push({
+        visitorId: visitor.id,
+        name: visitor.name,
+        avatar: visitorAvatar || visitor.avatar,
+        x,
+        y,
+      });
+    }
+
+    setActiveVisitors(hostGarden.id, visitors);
+
+    await prisma.visitRecord.create({
+      data: {
+        visitorId: visitor.id,
+        visitorName: visitor.name,
+        visitorAvatar: visitorAvatar || visitor.avatar,
+        action: "started visiting your garden",
+        gardenId: hostGarden.id,
+        userId: visitor.id,
+      },
+    });
+
+    const visitRecords = await prisma.visitRecord.findMany({
+      where: {
+        gardenId: hostGarden.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 30,
+    });
+
+    res.json({
+      success: true,
+      activeVisitors: getActiveVisitors(hostGarden.id),
+      visitRecords,
+    });
+  } catch (err) {
+    console.error("POST /visit error:", err);
+    res.status(500).json({ error: "Failed to visit garden" });
   }
-
-  const hostGarden = host.getGarden();
-
-  hostGarden.startActiveVisit({
-    visitorId: visitor.id,
-    name: visitor.name,
-    avatar: visitorAvatar || visitor.avatar,
-    x,
-    y
-  });
-
-  const record = new VisitRecord({
-    visitorId: visitor.id,
-    visitorName: visitor.name,
-    visitorAvatar: visitorAvatar || visitor.avatar,
-    action: "started visiting your garden"
-  });
-
-  hostGarden.addVisitRecord(record);
-
-  res.json({
-    success: true,
-    activeVisitors: hostGarden.getActiveVisitors(),
-    visitRecords: hostGarden.getVisitRecords()
-  });
 });
 
-app.post("/visit/move", (req, res) => {
-  const { hostUserId, visitorUserId, x, y, visitorAvatar } = req.body;
+app.post("/visit/move", async (req, res) => {
+  try {
+    const { hostUserId, visitorUserId, x, y, visitorAvatar } = req.body;
 
-  const host = getUser(hostUserId);
-  const visitor = getUser(visitorUserId);
+    if (typeof x !== "number" || typeof y !== "number") {
+      return res.status(400).json({ error: "x and y must be numbers" });
+    }
 
-  if (!host || !visitor) {
-    return res.status(404).json({ error: "User not found" });
+    const host = await prisma.user.findUnique({
+      where: {
+        id: hostUserId,
+      },
+    });
+
+    const visitor = await prisma.user.findUnique({
+      where: {
+        id: visitorUserId,
+      },
+    });
+
+    if (!host || !visitor) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const hostGarden = await ensureGarden(host.id);
+    const visitors = getActiveVisitors(hostGarden.id);
+
+    const activeVisitor = visitors.find(
+      (item) => item.visitorId === visitorUserId
+    );
+
+    if (!activeVisitor) {
+      return res.status(404).json({ error: "Visitor not active in this garden" });
+    }
+
+    activeVisitor.x = x;
+    activeVisitor.y = y;
+
+    if (visitorAvatar) {
+      activeVisitor.avatar = visitorAvatar;
+    }
+
+    setActiveVisitors(hostGarden.id, visitors);
+
+    res.json({
+      success: true,
+      activeVisitors: getActiveVisitors(hostGarden.id),
+    });
+  } catch (err) {
+    console.error("POST /visit/move error:", err);
+    res.status(500).json({ error: "Failed to move visitor" });
   }
-
-  if (typeof x !== "number" || typeof y !== "number") {
-    return res.status(400).json({ error: "x and y must be numbers" });
-  }
-
-  const moved = host.getGarden().moveActiveVisit(visitorUserId, x, y);
-
-  if (!moved) {
-    return res.status(404).json({ error: "Visitor not active in this garden" });
-  }
-
-  const activeVisitor = host
-    .getGarden()
-    .getActiveVisitors()
-    .find((item) => item.visitorId === visitorUserId);
-
-  if (activeVisitor && visitorAvatar) {
-    activeVisitor.avatar = visitorAvatar;
-  }
-
-  res.json({
-    success: true,
-    activeVisitors: host.getGarden().getActiveVisitors()
-  });
 });
 
-app.post("/leave", (req, res) => {
-  const { hostUserId, visitorUserId, visitorAvatar } = req.body;
+app.post("/leave", async (req, res) => {
+  try {
+    const { hostUserId, visitorUserId, visitorAvatar } = req.body;
 
-  const host = getUser(hostUserId);
-  const visitor = getUser(visitorUserId);
+    const host = await prisma.user.findUnique({
+      where: {
+        id: hostUserId,
+      },
+    });
 
-  if (!host || !visitor) {
-    return res.status(404).json({ error: "User not found" });
+    const visitor = await prisma.user.findUnique({
+      where: {
+        id: visitorUserId,
+      },
+    });
+
+    if (!host || !visitor) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const hostGarden = await ensureGarden(host.id);
+
+    const visitors = getActiveVisitors(hostGarden.id).filter(
+      (item) => item.visitorId !== visitor.id
+    );
+
+    setActiveVisitors(hostGarden.id, visitors);
+
+    await prisma.visitRecord.create({
+      data: {
+        visitorId: visitor.id,
+        visitorName: visitor.name,
+        visitorAvatar: visitorAvatar || visitor.avatar,
+        action: "left your garden",
+        gardenId: hostGarden.id,
+        userId: visitor.id,
+      },
+    });
+
+    const visitRecords = await prisma.visitRecord.findMany({
+      where: {
+        gardenId: hostGarden.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 30,
+    });
+
+    res.json({
+      success: true,
+      activeVisitors: getActiveVisitors(hostGarden.id),
+      visitRecords,
+    });
+  } catch (err) {
+    console.error("POST /leave error:", err);
+    res.status(500).json({ error: "Failed to leave garden" });
   }
-
-  const hostGarden = host.getGarden();
-
-  hostGarden.endActiveVisit(visitor.id);
-
-  const record = new VisitRecord({
-    visitorId: visitor.id,
-    visitorName: visitor.name,
-    visitorAvatar: visitorAvatar || visitor.avatar,
-    action: "left your garden"
-  });
-
-  hostGarden.addVisitRecord(record);
-
-  res.json({
-    success: true,
-    activeVisitors: hostGarden.getActiveVisitors(),
-    visitRecords: hostGarden.getVisitRecords()
-  });
 });
 
 app.post("/analyze-mood", async (req, res) => {

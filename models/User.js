@@ -1,4 +1,4 @@
-const Garden = require("./Garden");
+import Garden from "./Garden.js";
 
 class User {
   constructor({ id, name, avatar, friends = [] }) {
@@ -24,4 +24,4 @@ class User {
   }
 }
 
-module.exports = User;
+export default User;

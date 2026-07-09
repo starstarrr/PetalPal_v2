@@ -25,4 +25,4 @@ const flowerDB = {
   ]
 };
 
-module.exports = flowerDB;
+export default flowerDB;

@@ -8,5 +8,4 @@ class VisitRecord {
       this.time = new Date().toLocaleString();
     }
   }
-  
-  module.exports = VisitRecord;
+  export default VisitRecord;

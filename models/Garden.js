@@ -84,4 +84,4 @@ class Garden {
   }
 }
 
-module.exports = Garden;
+export default Garden;

@@ -1,12 +1,18 @@
 {
-  "devDependencies": {
-    "c8": "^11.0.0",
-    "jest": "^30.2.0",
-    "jest-environment-jsdom": "^30.2.0"
-  },
-  "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "natural": "^8.1.1"
-  }
+    "type": "module",
+    "devDependencies": {
+        "c8": "^11.0.0",
+        "jest": "^30.2.0",
+        "jest-environment-jsdom": "^30.2.0"
+    },
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.8.0",
+        "@prisma/client": "^7.8.0",
+        "cors": "^2.8.6",
+        "dotenv": "^17.4.2",
+        "express": "^5.2.1",
+        "natural": "^8.1.1",
+        "pg": "^8.22.0",
+        "prisma": "^7.8.0"
+    }
 }

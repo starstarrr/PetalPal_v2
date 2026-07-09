@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id
+  name      String
+  avatar    String   @default("🦋")
+  createdAt DateTime @default(now())
+
+  garden        Garden?
+  flowers       Flower[]
+  messages      Message[]
+  visitRecords  VisitRecord[]
+  friends       Friendship[] @relation("UserFriends")
+  friendOf      Friendship[] @relation("FriendOf")
+}
+
+model Garden {
+  id        String   @id @default(cuid())
+  ownerId   String   @unique
+  year      Int      @default(2026)
+  createdAt DateTime @default(now())
+
+  owner        User          @relation(fields: [ownerId], references: [id])
+  flowers      Flower[]
+  visitRecords VisitRecord[]
+}
+
+model Flower {
+  id           String   @id @default(cuid())
+  mood         String
+  event        String   @default("")
+  name         String
+  meaning      String
+  img          String
+  left         Float
+  top          Float
+  supportCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  userId   String
+  gardenId String
+
+  user     User     @relation(fields: [userId], references: [id])
+  garden   Garden   @relation(fields: [gardenId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  author    String   @default("Friend")
+  text      String   @default("")
+  createdAt DateTime @default(now())
+
+  flowerId String
+  userId   String?
+
+  flower Flower @relation(fields: [flowerId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+}
+
+model VisitRecord {
+  id            String   @id @default(cuid())
+  visitorId     String
+  visitorName   String
+  visitorAvatar String
+  action        String
+  createdAt     DateTime @default(now())
+
+  gardenId String
+  userId   String?
+
+  garden Garden @relation(fields: [gardenId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user   User @relation("UserFriends", fields: [userId], references: [id])
+  friend User @relation("FriendOf", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}

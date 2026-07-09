@@ -27,4 +27,4 @@ class Flower {
   }
 }
 
-module.exports = Flower;
+export default Flower;

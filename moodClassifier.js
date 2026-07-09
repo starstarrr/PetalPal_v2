@@ -1,5 +1,9 @@
-const natural = require("natural");
-const path = require("path");
+import natural from "natural";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let classifierPromise = null;
 
@@ -34,7 +38,4 @@ async function predictMood(text) {
   return classifier.classify(text.trim());
 }
 
-module.exports = {
-  predictMood,
-  loadMoodModel
-};
+export { predictMood, loadMoodModel };
