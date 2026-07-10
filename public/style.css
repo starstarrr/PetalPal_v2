@@ -477,3 +477,43 @@ button:active {
   font-size: 2rem;
   pointer-events: none;
 }
+/* ===== Profile List ===== */
+
+.profile-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .profile-user-btn {
+    flex: 1;
+    margin: 0;
+  }
+  
+  .delete-user-btn {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    margin: 0;
+  
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  
+    border: none;
+    border-radius: 14px;
+  
+    background: linear-gradient(to right, #ff9d9d, #ff7070);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+  
+    transition: all 0.2s ease;
+  }
+  
+  .delete-user-btn:hover {
+    background: linear-gradient(to right, #ff6f6f, #ff4a4a);
+    transform: scale(1.05);
+  }
+

@@ -9,7 +9,7 @@ let pollTimer = null;
 const POLL_INTERVAL = 1200;
 let isAddFriendSelectOpen = false;
 
-// 当前选中的 flower id
+
 let selectedFlowerId = null;
 
 function updateGardenTitle(title) {
@@ -231,7 +231,6 @@ async function refreshSocialPanels() {
     return;
   }
 
-  await renderAddFriendOptions();
   await renderFriendsList();
 
   if (viewMode === "friend" && currentVisitedFriendId) {
@@ -417,122 +416,7 @@ async function removeFriend(friendId) {
   return data;
 }
 
-async function createNewUser(name, avatar) {
-  const res = await fetch("/users", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name,
-      avatar
-    })
-  });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.error || "Failed to create user");
-  }
-
-  return data;
-}
-
-async function renderUserPicker() {
-  const userListDiv = document.getElementById("userList");
-  if (!userListDiv) {
-    return;
-  }
-
-  userListDiv.innerHTML = "";
-
-  try {
-    const users = await fetchAllUsers();
-
-    if (!users || users.length === 0) {
-      userListDiv.innerHTML = `<p class="empty-message">No users yet 🌱</p>`;
-      return;
-    }
-
-    users.forEach((user) => {
-      const btn = document.createElement("button");
-      btn.textContent = `${user.avatar} ${user.name}`;
-      btn.addEventListener("click", async () => {
-        try {
-          if (viewMode === "friend" && currentVisitedFriendId) {
-            try {
-              await leaveVisit(currentVisitedFriendId, getCurrentUserId());
-            } catch (err) {
-              console.error("Leave on profile switch error:", err);
-            }
-          }
-
-          setCurrentUserId(user.id);
-          window.history.replaceState({}, "", `/?userId=${user.id}`);
-          currentUserProfile = await fetchUser(getCurrentUserId());
-
-          showAppMode();
-          updateCurrentProfileText();
-          await renderUserPicker();
-          await renderAddFriendOptions();
-          await renderFriendsList();
-          await loadMyGarden();
-          startPolling();
-        } catch (err) {
-          console.error("Profile switch error:", err);
-          alert("Failed to switch profile");
-        }
-      });
-
-      userListDiv.appendChild(btn);
-    });
-  } catch (err) {
-    console.error("Render user picker error:", err);
-    userListDiv.innerHTML = `<p class="empty-message">Failed to load users</p>`;
-  }
-}
-
-async function renderAddFriendOptions() {
-  const select = document.getElementById("addFriendSelect");
-  if (!select) {
-    return;
-  }
-
-  if (isAddFriendSelectOpen) {
-    return;
-  }
-
-  const previousValue = select.value;
-
-  try {
-    const allUsers = await fetchAllUsers();
-    const friends = await fetchFriends(getCurrentUserId());
-    const friendIds = new Set((friends || []).map((friend) => friend.id));
-
-    const candidates = allUsers
-      .filter((user) => user.id !== getCurrentUserId())
-      .filter((user) => !friendIds.has(user.id));
-
-    select.innerHTML = `<option value="">Choose a user</option>`;
-
-    candidates.forEach((user) => {
-      const option = document.createElement("option");
-      option.value = user.id;
-      option.textContent = `${user.avatar} ${user.name}`;
-      select.appendChild(option);
-    });
-
-    const stillExists = candidates.some((user) => user.id === previousValue);
-    if (stillExists) {
-      select.value = previousValue;
-    } else {
-      select.value = "";
-    }
-  } catch (err) {
-    console.error("Render add friend options error:", err);
-    select.innerHTML = `<option value="">Failed to load users</option>`;
-  }
-}
 
 async function renderFriendsList() {
   const friendsListDiv = document.getElementById("friendsList");
@@ -589,7 +473,7 @@ async function renderFriendsList() {
             await loadMyGarden();
           }
 
-          await renderAddFriendOptions();
+          //await renderAddFriendOptions();
           await renderFriendsList();
         } catch (err) {
           console.error("Remove friend error:", err);
@@ -701,75 +585,180 @@ function setupGardenSwitchButtons() {
     });
   }
 }
-
-function setupCreateUserButton() {
-  const createBtn = document.getElementById("createUserBtn");
-  if (!createBtn) {
-    return;
-  }
-
-  createBtn.addEventListener("click", async () => {
-    const nameInput = document.getElementById("newUserName");
-    const avatarSelect = document.getElementById("newUserAvatar");
-
-    const name = nameInput ? nameInput.value.trim() : "";
-    const avatar = avatarSelect ? avatarSelect.value : "🦋";
-
-    if (!name) {
-      alert("Please enter a name");
+function setFriendSearchMessage(message, isError = false) {
+    const messageElement =
+      document.getElementById("friendSearchMessage");
+  
+    if (!messageElement) {
       return;
     }
-
-    try {
-      const newUser = await createNewUser(name, avatar);
-
-      setCurrentUserId(newUser.id);
-      window.history.replaceState({}, "", `/?userId=${newUser.id}`);
-      currentUserProfile = await fetchUser(getCurrentUserId());
-
-      if (nameInput) {
-        nameInput.value = "";
+  
+    messageElement.textContent = message;
+    messageElement.style.color = isError ? "#c0392b" : "";
+  }
+  
+  async function searchFriendsByName(name) {
+    const currentUserId = getCurrentUserId();
+  
+    if (!currentUserId) {
+      throw new Error("Please log in first");
+    }
+  
+    const params = new URLSearchParams({
+      name,
+      currentUserId
+    });
+  
+    const res = await fetch(
+      `/users/search?${params.toString()}`
+    );
+  
+    const data = await res.json();
+  
+    if (!res.ok) {
+      throw new Error(
+        data.error || "Failed to search users"
+      );
+    }
+  
+    return data;
+  }
+  
+  function renderFriendSearchResults(users) {
+    const resultsDiv =
+      document.getElementById("friendSearchResults");
+  
+    if (!resultsDiv) {
+      return;
+    }
+  
+    resultsDiv.innerHTML = "";
+  
+    if (!users || users.length === 0) {
+      resultsDiv.innerHTML = `
+        <p class="empty-message">
+          No matching users found 🌱
+        </p>
+      `;
+      return;
+    }
+  
+    users.forEach((user) => {
+      const item = document.createElement("div");
+      item.className = "friend-item";
+  
+      const userInfo = document.createElement("div");
+      userInfo.className = "friend-name";
+      userInfo.textContent =
+        `${user.avatar || "🦋"} ${user.name}`;
+  
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "friend-open-btn";
+      addButton.textContent = "Add Friend";
+  
+      addButton.addEventListener("click", async () => {
+        addButton.disabled = true;
+        addButton.textContent = "Adding...";
+  
+        try {
+          await addFriend(user.id);
+  
+          setFriendSearchMessage(
+            `${user.name} added successfully!`
+          );
+  
+          item.remove();
+          await renderFriendsList();
+        } catch (err) {
+          console.error("Add friend error:", err);
+  
+          setFriendSearchMessage(
+            err.message || "Failed to add friend",
+            true
+          );
+  
+          addButton.disabled = false;
+          addButton.textContent = "Add Friend";
+        }
+      });
+  
+      item.appendChild(userInfo);
+      item.appendChild(addButton);
+      resultsDiv.appendChild(item);
+    });
+  }
+  
+  function setupFriendSearch() {
+    const searchInput =
+      document.getElementById("friendSearchInput");
+  
+    const searchButton =
+      document.getElementById("friendSearchBtn");
+  
+    if (!searchInput || !searchButton) {
+      return;
+    }
+  
+    async function performSearch() {
+      const name = searchInput.value.trim();
+  
+      setFriendSearchMessage("");
+  
+      const resultsDiv =
+        document.getElementById("friendSearchResults");
+  
+      if (resultsDiv) {
+        resultsDiv.innerHTML = "";
       }
-
-      showAppMode();
-      updateCurrentProfileText();
-      await renderUserPicker();
-      await renderAddFriendOptions();
-      await renderFriendsList();
-      await loadMyGarden();
-      startPolling();
-    } catch (err) {
-      console.error("Create user error:", err);
-      alert(err.message || "Failed to create user");
+  
+      if (!name) {
+        setFriendSearchMessage(
+          "Please enter a friend's name.",
+          true
+        );
+        return;
+      }
+  
+      searchButton.disabled = true;
+      searchButton.textContent = "Searching...";
+  
+      try {
+        const users = await searchFriendsByName(name);
+  
+        renderFriendSearchResults(users);
+  
+        if (users.length > 0) {
+          setFriendSearchMessage(
+            `${users.length} user${
+              users.length === 1 ? "" : "s"
+            } found.`
+          );
+        }
+      } catch (err) {
+        console.error("Friend search error:", err);
+  
+        setFriendSearchMessage(
+          err.message || "Failed to search users",
+          true
+        );
+      } finally {
+        searchButton.disabled = false;
+        searchButton.textContent = "Search";
+      }
     }
-  });
-}
-
-function setupAddFriendButton() {
-  const addBtn = document.getElementById("addFriendBtn");
-  if (!addBtn) {
-    return;
+  
+    searchButton.addEventListener("click", performSearch);
+  
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        performSearch();
+      }
+    });
   }
 
-  addBtn.addEventListener("click", async () => {
-    const select = document.getElementById("addFriendSelect");
-    const friendId = select ? select.value : "";
 
-    if (!friendId) {
-      alert("Please choose a user to add");
-      return;
-    }
 
-    try {
-      await addFriend(friendId);
-      await renderAddFriendOptions();
-      await renderFriendsList();
-    } catch (err) {
-      console.error("Add friend error:", err);
-      alert(err.message || "Failed to add friend");
-    }
-  });
-}
 
 function setupBeforeUnload() {
   window.addEventListener("beforeunload", () => {
@@ -791,51 +780,59 @@ function setupBeforeUnload() {
 }
 
 async function init() {
-  try {
-    setupCreateUserButton();
-    setupAddFriendButton();
-    setupSubmitButton();
-    setupVisitorChoices();
-    setupGardenSwitchButtons();
-    setupBeforeUnload();
-    setupAddFriendSelectLock();
-
-    if (typeof setupGardenClickMove === "function") {
-      setupGardenClickMove();
-    }
-
-    if (typeof setupFriendFlowerActions === "function") {
-      setupFriendFlowerActions();
-    }
-
-    await renderUserPicker();
-
-    if (!getCurrentUserId()) {
-      showAuthMode();
-      return;
-    }
-
     try {
-      currentUserProfile = await fetchUser(getCurrentUserId());
+     
+      setupLogin();
+  
+      setupFriendSearch();
+      setupSubmitButton();
+      setupVisitorChoices();
+      setupGardenSwitchButtons();
+      setupBeforeUnload();
+  
+      if (typeof setupGardenClickMove === "function") {
+        setupGardenClickMove();
+      }
+  
+      if (typeof setupFriendFlowerActions === "function") {
+        setupFriendFlowerActions();
+      }
+  
+     
+      if (!getCurrentUserId()) {
+        currentUserProfile = null;
+        showAuthMode();
+        return;
+      }
+  
+     
+      try {
+        currentUserProfile = await fetchUser(getCurrentUserId());
+      } catch (err) {
+        console.error(
+          "Invalid saved user, returning to auth mode:",
+          err
+        );
+  
+        clearCurrentUserId();
+        currentUserProfile = null;
+        showAuthMode();
+        return;
+      }
+  
+     
+      showAppMode();
+      updateCurrentProfileText();
+  
+      await renderFriendsList();
+      await loadMyGarden();
+  
+      startPolling();
     } catch (err) {
-      console.error("Invalid saved user, returning to auth mode:", err);
-      clearCurrentUserId();
-      showAuthMode();
-      await renderUserPicker();
-      return;
+      console.error("Init error:", err);
+      alert("Failed to initialize app");
     }
-
-    showAppMode();
-    updateCurrentProfileText();
-    await renderAddFriendOptions();
-    await renderFriendsList();
-    await loadMyGarden();
-    startPolling();
-  } catch (err) {
-    console.error("Init error:", err);
-    alert("Failed to initialize app");
   }
-}
 
 if (typeof window !== "undefined") {
   window.onload = init;
@@ -893,29 +890,6 @@ function showAppMode() {
   if (checkin) checkin.style.display = "block";
 }
 
-function setupAddFriendSelectLock() {
-  const select = document.getElementById("addFriendSelect");
-  if (!select) {
-    return;
-  }
-
-  select.addEventListener("focus", () => {
-    isAddFriendSelectOpen = true;
-  });
-
-  select.addEventListener("mousedown", () => {
-    isAddFriendSelectOpen = true;
-  });
-
-  select.addEventListener("change", () => {
-    isAddFriendSelectOpen = false;
-  });
-
-  select.addEventListener("blur", () => {
-    isAddFriendSelectOpen = false;
-  });
-}
-
 
 function __setMainTestState(patch) {
   if ("currentGardenView" in patch) currentGardenView = patch.currentGardenView;
@@ -944,7 +918,7 @@ function __getMainTestState() {
   };
 }
 
-if (typeof module !== "undefined" && module.exports) {
+/*if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     updateGardenTitle,
     updateCurrentProfileText,
@@ -967,7 +941,8 @@ if (typeof module !== "undefined" && module.exports) {
     showMyGarden,
     setupGardenSwitchButtons,
     setupSubmitButton,
-    setupCreateUserButton,
+    //setupCreateUserButton,
     setupAddFriendButton
   };
 }
+*/

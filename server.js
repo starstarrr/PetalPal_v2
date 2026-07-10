@@ -2,10 +2,12 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import bcrypt from "bcrypt";
 
 import prisma from "./lib/prisma.js";
 import { createFlower } from "./logic/gardenLogic.js";
 import { predictMood, loadMoodModel } from "./moodClassifier.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,6 +137,50 @@ app.get("/users", async (req, res) => {
   }
 });
 
+app.get("/users/search", async (req, res) => {
+    try {
+      const name = (req.query.name || "").trim();
+      const currentUserId = req.query.currentUserId;
+  
+      if (!name) {
+        return res.json([]);
+      }
+  
+      const users = await prisma.user.findMany({
+        where: {
+          id: {
+            not: currentUserId
+          },
+  
+          name: {
+            contains: name,
+            mode: "insensitive"
+          }
+        },
+  
+        select: {
+          id: true,
+          name: true,
+          avatar: true
+        },
+  
+        orderBy: {
+          name: "asc"
+        }
+      });
+  
+      res.json(users);
+  
+    } catch (err) {
+  
+      console.error("Search user error:", err);
+  
+      res.status(500).json({
+        error: "Failed to search users"
+      });
+    }
+  });
+
 app.get("/users/:userId", async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -210,6 +256,130 @@ app.get("/users/:userId/garden", async (req, res) => {
     res.status(500).json({ error: "Failed to get garden" });
   }
 });
+app.post("/register", async (req, res) => {
+    try {
+      const { name, email, password, avatar } = req.body;
+  
+      if (!name || !email || !password) {
+        return res.status(400).json({
+          error: "Name, email and password are required"
+        });
+      }
+  
+      const normalizedEmail = email.trim().toLowerCase();
+  
+      if (password.length < 6) {
+        return res.status(400).json({
+          error: "Password must be at least 6 characters"
+        });
+      }
+  
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: normalizedEmail },
+            {
+              name: {
+                equals: name.trim(),
+                mode: "insensitive"
+              }
+            }
+          ]
+        }
+      });
+  
+      if (existingUser) {
+        return res.status(400).json({
+          error: "Email or username already exists"
+        });
+      }
+  
+      const passwordHash = await bcrypt.hash(password, 12);
+  
+      const id = `user_${Date.now()}`;
+      const accountId = `PP${Date.now().toString().slice(-8)}`;
+  
+      const user = await prisma.user.create({
+        data: {
+          id,
+          accountId,
+          name: name.trim(),
+          email: normalizedEmail,
+          passwordHash,
+          avatar: avatar || "🦋",
+          garden: {
+            create: {
+              year: new Date().getFullYear()
+            }
+          }
+        },
+        select: {
+          id: true,
+          accountId: true,
+          name: true,
+          email: true,
+          avatar: true
+        }
+      });
+  
+      res.status(201).json(user);
+    } catch (err) {
+      console.error("REGISTER error:", err);
+      res.status(500).json({
+        error: "Failed to register"
+      });
+    }
+  });
+
+  app.post("/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+  
+      if (!email || !password) {
+        return res.status(400).json({
+          error: "Email and password are required"
+        });
+      }
+  
+      const normalizedEmail = email.trim().toLowerCase();
+  
+      const user = await prisma.user.findUnique({
+        where: {
+          email: normalizedEmail
+        }
+      });
+  
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({
+          error: "Invalid email or password"
+        });
+      }
+  
+      const passwordMatches = await bcrypt.compare(
+        password,
+        user.passwordHash
+      );
+  
+      if (!passwordMatches) {
+        return res.status(401).json({
+          error: "Invalid email or password"
+        });
+      }
+  
+      res.json({
+        id: user.id,
+        accountId: user.accountId,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+      });
+    } catch (err) {
+      console.error("LOGIN error:", err);
+      res.status(500).json({
+        error: "Failed to log in"
+      });
+    }
+  });
 
 app.post("/users", async (req, res) => {
   try {
@@ -757,6 +927,106 @@ app.post("/analyze-mood", async (req, res) => {
     res.status(500).json({ error: "Failed to analyze mood" });
   }
 });
+
+app.delete("/users/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+  
+      const user = await prisma.user.findUnique({
+        where: { id }
+      });
+  
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+  
+      await prisma.friendship.deleteMany({
+        where: {
+          OR: [
+            { userId: id },
+            { friendId: id }
+          ]
+        }
+      });
+  
+      const garden = await prisma.garden.findUnique({
+        where: {
+          ownerId: id
+        }
+      });
+  
+      if (garden) {
+        const flowers = await prisma.flower.findMany({
+          where: {
+            gardenId: garden.id
+          },
+          select: {
+            id: true
+          }
+        });
+  
+        const flowerIds = flowers.map((flower) => flower.id);
+  
+        if (flowerIds.length > 0) {
+          await prisma.message.deleteMany({
+            where: {
+              flowerId: {
+                in: flowerIds
+              }
+            }
+          });
+  
+          await prisma.flower.deleteMany({
+            where: {
+              id: {
+                in: flowerIds
+              }
+            }
+          });
+        }
+  
+        await prisma.visitRecord.deleteMany({
+          where: {
+            gardenId: garden.id
+          }
+        });
+  
+        await prisma.garden.delete({
+          where: {
+            id: garden.id
+          }
+        });
+      }
+  
+      await prisma.visitRecord.deleteMany({
+        where: {
+          visitorId: id
+        }
+      });
+  
+      await prisma.message.deleteMany({
+        where: {
+          userId: id
+        }
+      });
+  
+      await prisma.user.delete({
+        where: {
+          id
+        }
+      });
+  
+      res.json({
+        success: true,
+        message: "User deleted successfully"
+      });
+    } catch (err) {
+      console.error("DELETE /users/:id error:", err);
+      res.status(500).json({
+        error: err.message || "Failed to delete user"
+      });
+    }
+  });
 
 loadMoodModel()
   .then(() => {
