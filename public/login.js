@@ -153,7 +153,7 @@ async function finishLogin(user) {
   showAppMode();
   updateCurrentProfileText();
 
-  await renderAddFriendOptions();
+  //await renderAddFriendOptions();
   await renderFriendsList();
   await loadMyGarden();
 

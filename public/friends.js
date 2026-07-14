@@ -79,7 +79,30 @@ async function fetchFriends(userId) {
 }
 
 async function fetchGarden(userId) {
-  return apiGet(`/users/${userId}/garden`);
+    if (!userId) {
+        throw new Error("User ID is required");
+      }
+    
+      const res = await fetch(
+        `/users/${encodeURIComponent(userId)}/garden?t=${Date.now()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
+        }
+      );
+    
+      const data = await res.json();
+    
+      if (!res.ok) {
+        throw new Error(
+          data.error || "Failed to fetch garden"
+        );
+      }
+    
+      return data;
 }
 
 async function createUser(name, avatar) {
@@ -98,16 +121,39 @@ async function createFlowerForUser(userId, mood, event) {
   return apiPost(`/users/${userId}/flowers`, { mood, event });
 }
 
-async function supportFlowerForUser(userId, flowerId) {
-  return apiPost(`/users/${userId}/flowers/${flowerId}/support`, {});
-}
+async function supportFlowerForUser(
+    userId,
+    flowerId,
+    visitorUserId,
+    visitorAvatar
+  ) {
+    return apiPost(
+      `/users/${userId}/flowers/${flowerId}/support`,
+      {
+        visitorUserId,
+        visitorAvatar
+      }
+    );
+  }
 
-async function messageFlowerForUser(userId, flowerId, author, text) {
-  return apiPost(`/users/${userId}/flowers/${flowerId}/message`, {
+  async function messageFlowerForUser(
+    userId,
+    flowerId,
     author,
-    text
-  });
-}
+    text,
+    visitorUserId,
+    visitorAvatar
+  ) {
+    return apiPost(
+      `/users/${userId}/flowers/${flowerId}/message`,
+      {
+        author,
+        text,
+        visitorUserId,
+        visitorAvatar
+      }
+    );
+  }
 
 async function deleteFlowerForUser(userId, flowerId) {
   return apiDelete(`/users/${userId}/flowers/${flowerId}`);

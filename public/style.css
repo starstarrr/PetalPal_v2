@@ -516,4 +516,75 @@ button:active {
     background: linear-gradient(to right, #ff6f6f, #ff4a4a);
     transform: scale(1.05);
   }
+  /* ===== Visitor Records Scroll Area ===== */
+
+#visitRecords {
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 10px;
+    overscroll-behavior: contain;
+  }
+  
+  #visitRecords::-webkit-scrollbar {
+    width: 9px;
+  }
+  
+  #visitRecords::-webkit-scrollbar-track {
+    background: rgba(91, 63, 47, 0.08);
+    border-radius: 999px;
+  }
+  
+  #visitRecords::-webkit-scrollbar-thumb {
+    background: rgba(91, 63, 47, 0.3);
+    border-radius: 999px;
+  }
+  
+  #visitRecords::-webkit-scrollbar-thumb:hover {
+    background: rgba(91, 63, 47, 0.45);
+  }
+
+  .visit-record-item {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(91, 63, 47, 0.12);
+  }
+  
+  .visit-record-item:last-child {
+    border-bottom: none;
+  }
+  
+  .visit-record-text {
+    margin: 0 0 6px;
+    line-height: 1.45;
+    color: #4b372a;
+  }
+  
+  .visit-record-time {
+    margin: 0;
+    font-size: 14px;
+    color: #7b6b60;
+  }
+
+  .tooltip-delete-btn {
+    width: 100%;
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: linear-gradient(
+      to right,
+      #ff9d9d,
+      #ff7070
+    );
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  
+  .tooltip-delete-btn:hover {
+    background: linear-gradient(
+      to right,
+      #ff7777,
+      #ff5050
+    );
+  }
 

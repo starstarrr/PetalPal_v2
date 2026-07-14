@@ -7,13 +7,55 @@ import bcrypt from "bcrypt";
 import prisma from "./lib/prisma.js";
 import { createFlower } from "./logic/gardenLogic.js";
 import { predictMood, loadMoodModel } from "./moodClassifier.js";
-
+import http from "http";
+import { Server } from "socket.io";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+//ROS
+io.on("connection", (socket) => {
+    console.log("Socket connected:", socket.id);
+  
+    socket.on("join-user", (userId) => {
+      if (!userId) return;
+  
+      socket.join(`user:${userId}`);
+      console.log(`${socket.id} joined user:${userId}`);
+    });
+  
+    socket.on("join-garden", (gardenOwnerId) => {
+      if (!gardenOwnerId) return;
+  
+      if (socket.data.currentGarden) {
+        socket.leave(`garden:${socket.data.currentGarden}`);
+      }
+  
+      socket.data.currentGarden = gardenOwnerId;
+  
+      socket.join(`garden:${gardenOwnerId}`);
+  
+      console.log(
+        `${socket.id} joined garden:${gardenOwnerId}`
+      );
+    });
+  
+    socket.on("disconnect", () => {
+      console.log("Socket disconnected:", socket.id);
+    });
+  });
+
 
 app.use(cors());
 app.use(express.json());
@@ -575,102 +617,219 @@ app.post("/users/:userId/flowers", async (req, res) => {
 });
 
 app.post("/users/:userId/flowers/:flowerId/support", async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: req.params.userId,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    const flower = await prisma.flower.findFirst({
-      where: {
-        id: req.params.flowerId,
-        userId: user.id,
-      },
-    });
-
-    if (!flower) {
-      return res.status(404).json({ error: "Flower not found" });
-    }
-
-    const updatedFlower = await prisma.flower.update({
-      where: {
-        id: flower.id,
-      },
-      data: {
-        supportCount: {
-          increment: 1,
+    try {
+      const {
+        visitorUserId,
+        visitorAvatar
+      } = req.body;
+  
+      const user = await prisma.user.findUnique({
+        where: {
+          id: req.params.userId
+        }
+      });
+  
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found"
+        });
+      }
+  
+      const flower = await prisma.flower.findFirst({
+        where: {
+          id: req.params.flowerId,
+          userId: user.id
+        }
+      });
+  
+      if (!flower) {
+        return res.status(404).json({
+          error: "Flower not found"
+        });
+      }
+  
+      const updatedFlower = await prisma.flower.update({
+        where: {
+          id: flower.id
         },
-      },
-      include: {
-        messages: true,
-      },
-    });
-
-    res.json(updatedFlower);
-  } catch (err) {
-    console.error("POST /support error:", err);
-    res.status(500).json({ error: "Failed to support flower" });
-  }
-});
-
-app.post("/users/:userId/flowers/:flowerId/message", async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: req.params.userId,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+        data: {
+          supportCount: {
+            increment: 1
+          }
+        },
+        include: {
+          messages: true
+        }
+      });
+  
+      let newVisitRecord = null;
+  
+      if (visitorUserId) {
+        const visitor = await prisma.user.findUnique({
+          where: {
+            id: visitorUserId
+          }
+        });
+  
+        if (visitor) {
+          const hostGarden = await ensureGarden(user.id);
+  
+          newVisitRecord = await prisma.visitRecord.create({
+            data: {
+              visitorId: visitor.id,
+              visitorName: visitor.name,
+              visitorAvatar:
+                visitorAvatar ||
+                visitor.avatar ||
+                "🦋",
+              action: "support",
+              gardenId: hostGarden.id,
+              userId: visitor.id
+            }
+          });
+        }
+      }
+  
+      const supportPayload = {
+        flowerId: updatedFlower.id,
+        supportCount: updatedFlower.supportCount
+      };
+  
+      io
+        .to(`garden:${req.params.userId}`)
+        .to(`user:${req.params.userId}`)
+        .emit("flower-supported", supportPayload);
+  
+      if (newVisitRecord) {
+        io
+          .to(`garden:${req.params.userId}`)
+          .to(`user:${req.params.userId}`)
+          .emit("visit-record-added", newVisitRecord);
+      }
+  
+      res.json(updatedFlower);
+    } catch (err) {
+      console.error("POST /support error:", err);
+  
+      res.status(500).json({
+        error: "Failed to support flower"
+      });
     }
-
-    const { author, text } = req.body;
-
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: "Message cannot be empty" });
+  });
+  
+  app.post("/users/:userId/flowers/:flowerId/message", async (req, res) => {
+    try {
+      const {
+        author,
+        text,
+        visitorUserId,
+        visitorAvatar
+      } = req.body;
+  
+      const user = await prisma.user.findUnique({
+        where: {
+          id: req.params.userId
+        }
+      });
+  
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found"
+        });
+      }
+  
+      if (!text || !text.trim()) {
+        return res.status(400).json({
+          error: "Message cannot be empty"
+        });
+      }
+  
+      const flower = await prisma.flower.findFirst({
+        where: {
+          id: req.params.flowerId,
+          userId: user.id
+        }
+      });
+  
+      if (!flower) {
+        return res.status(404).json({
+          error: "Flower not found"
+        });
+      }
+  
+      const newMessage = await prisma.message.create({
+        data: {
+          author: author || "Friend",
+          text: text.trim(),
+          flowerId: flower.id,
+          userId: user.id
+        }
+      });
+  
+      let newVisitRecord = null;
+  
+      if (visitorUserId) {
+        const visitor = await prisma.user.findUnique({
+          where: {
+            id: visitorUserId
+          }
+        });
+  
+        if (visitor) {
+          const hostGarden = await ensureGarden(user.id);
+  
+          newVisitRecord = await prisma.visitRecord.create({
+            data: {
+              visitorId: visitor.id,
+              visitorName: visitor.name,
+              visitorAvatar:
+                visitorAvatar ||
+                visitor.avatar ||
+                "🦋",
+              action: `message:${text.trim()}`,
+              gardenId: hostGarden.id,
+              userId: visitor.id
+            }
+          });
+        }
+      }
+  
+      const updatedFlower = await prisma.flower.findUnique({
+        where: {
+          id: flower.id
+        },
+        include: {
+          messages: true
+        }
+      });
+  
+      const messagePayload = {
+        flowerId: updatedFlower.id,
+        message: newMessage
+      };
+  
+      io
+        .to(`garden:${req.params.userId}`)
+        .to(`user:${req.params.userId}`)
+        .emit("flower-messaged", messagePayload);
+  
+      if (newVisitRecord) {
+        io
+          .to(`garden:${req.params.userId}`)
+          .to(`user:${req.params.userId}`)
+          .emit("visit-record-added", newVisitRecord);
+      }
+  
+      res.json(updatedFlower);
+    } catch (err) {
+      console.error("POST /message error:", err);
+  
+      res.status(500).json({
+        error: "Failed to add message"
+      });
     }
+  });
 
-    const flower = await prisma.flower.findFirst({
-      where: {
-        id: req.params.flowerId,
-        userId: user.id,
-      },
-    });
-
-    if (!flower) {
-      return res.status(404).json({ error: "Flower not found" });
-    }
-
-    await prisma.message.create({
-      data: {
-        author: author || "Friend",
-        text: text.trim(),
-        flowerId: flower.id,
-        userId: user.id,
-      },
-    });
-
-    const updatedFlower = await prisma.flower.findUnique({
-      where: {
-        id: flower.id,
-      },
-      include: {
-        messages: true,
-      },
-    });
-
-    res.json(updatedFlower);
-  } catch (err) {
-    console.error("POST /message error:", err);
-    res.status(500).json({ error: "Failed to add message" });
-  }
-});
 
 app.delete("/users/:userId/flowers/:flowerId", async (req, res) => {
   try {
@@ -842,10 +1001,24 @@ app.post("/visit/move", async (req, res) => {
 
     setActiveVisitors(hostGarden.id, visitors);
 
-    res.json({
-      success: true,
-      activeVisitors: getActiveVisitors(hostGarden.id),
-    });
+const movedVisitor = {
+  visitorId: activeVisitor.visitorId,
+  name: activeVisitor.name,
+  avatar: activeVisitor.avatar,
+  x: activeVisitor.x,
+  y: activeVisitor.y,
+};
+
+io.to(`garden:${hostUserId}`).emit(
+  "visitor-moved",
+  movedVisitor
+);
+
+res.json({
+  success: true,
+  activeVisitors: getActiveVisitors(hostGarden.id),
+});
+
   } catch (err) {
     console.error("POST /visit/move error:", err);
     res.status(500).json({ error: "Failed to move visitor" });
@@ -1036,6 +1209,6 @@ loadMoodModel()
     console.error("Failed to load mood model:", err);
   });
 
-app.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

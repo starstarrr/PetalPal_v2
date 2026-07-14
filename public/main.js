@@ -6,11 +6,156 @@ let currentVisitedFriendId = null;
 let viewMode = "mine";
 
 let pollTimer = null;
-const POLL_INTERVAL = 1200;
+const POLL_INTERVAL = 3000;
 let isAddFriendSelectOpen = false;
 
 
 let selectedFlowerId = null;
+const socket = io();
+
+socket.on("connect", () => {
+    console.log("Socket connected:", socket.id);
+
+    joinedGardenOwnerId = null;
+  
+    const myUserId = getCurrentUserId();
+  
+   
+    if (myUserId) {
+      socket.emit("join-user", String(myUserId));
+  
+      console.log(
+        "Joined personal room:",
+        `user:${myUserId}`
+      );
+    }
+  
+    const currentGardenOwnerId =
+      viewMode === "friend"
+        ? currentVisitedFriendId
+        : myUserId;
+  
+    if (currentGardenOwnerId) {
+      joinGardenRoom(currentGardenOwnerId);
+    }
+  });
+
+socket.on("disconnect", () => {
+  console.log("Socket disconnected");
+});
+
+socket.on("visitor-moved", (visitor) => {
+  if (!visitor || !visitor.visitorId) return;
+
+  const selectorId =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(String(visitor.visitorId))
+      : String(visitor.visitorId).replace(/["\\]/g, "\\$&");
+
+  const gardenDiv = document.getElementById("garden");
+  if (!gardenDiv) return;
+
+  let visitorEl = gardenDiv.querySelector(
+    `[data-visitor-id="${selectorId}"]`
+  );
+
+  if (!visitorEl && viewMode === "mine") {
+    visitorEl = document.createElement("div");
+    visitorEl.className = "host-visitor";
+    visitorEl.dataset.visitorId = String(visitor.visitorId);
+    gardenDiv.appendChild(visitorEl);
+  }
+
+  if (!visitorEl) return;
+
+  visitorEl.textContent = visitor.avatar || "🦋";
+  visitorEl.title = visitor.name || "Visitor";
+  visitorEl.style.left = `${Number(visitor.x) || 0}px`;
+  visitorEl.style.top = `${Number(visitor.y) || 0}px`;
+});
+
+socket.on("flower-supported", (data) => {
+    console.log("🔥 RECEIVED flower-supported", data);
+  if (!data || !data.flowerId) return;
+  updateFlowerInLocalState(data.flowerId, {
+    supportCount: data.supportCount
+  });
+  updateSupportCountOnPage(data.flowerId, data.supportCount);
+});
+
+socket.on("flower-messaged", (data) => {
+  if (!data || !data.flowerId || !data.message) return;
+
+  const flower = currentGardenView.find(
+    (item) => String(item.id) === String(data.flowerId)
+  );
+  const messages = [...(flower?.messages || [])];
+  const duplicate =
+    data.message.id && messages.some((item) => item.id === data.message.id);
+
+  if (!duplicate) messages.push(data.message);
+  updateFlowerInLocalState(data.flowerId, { messages });
+  updateLatestMessageOnPage(data.flowerId, data.message.text);
+});
+
+socket.on("visit-record-added", (record) => {
+    console.log("Received visit-record-added:", record);
+  
+    if (!record || !record.id) {
+      return;
+    }
+  
+    if (!myGardenData) {
+      return;
+    }
+  
+    if (!Array.isArray(myGardenData.visitRecords)) {
+      myGardenData.visitRecords = [];
+    }
+  
+    const alreadyExists = myGardenData.visitRecords.some(
+      (item) => String(item.id) === String(record.id)
+    );
+  
+    if (alreadyExists) {
+      return;
+    }
+  
+    myGardenData.visitRecords.unshift(record);
+  
+    if (myGardenData.visitRecords.length > 30) {
+      myGardenData.visitRecords =
+        myGardenData.visitRecords.slice(0, 30);
+    }
+  
+    renderVisitRecords();
+  });
+
+
+  
+
+let joinedGardenOwnerId = null;
+
+function joinGardenRoom(gardenOwnerId) {
+  if (!gardenOwnerId) {
+    return;
+  }
+
+  const normalizedOwnerId = String(gardenOwnerId);
+
+  if (joinedGardenOwnerId === normalizedOwnerId) {
+    return;
+  }
+
+  joinedGardenOwnerId = normalizedOwnerId;
+
+  socket.emit("join-garden", normalizedOwnerId);
+
+  console.log(
+    "Joined garden room:",
+    normalizedOwnerId
+  );
+}
 
 function updateGardenTitle(title) {
   const gardenTitle = document.getElementById("gardenTitle");
@@ -42,22 +187,30 @@ function getCurrentViewedUserId() {
 }
 
 function applyViewedGardenData(gardenData) {
-  currentViewedGardenData = gardenData;
-  currentGardenView = gardenData ? gardenData.flowers || [] : [];
-
-  if (!currentGardenView.length) {
+    currentViewedGardenData = gardenData;
+    currentGardenView = gardenData
+      ? gardenData.flowers || []
+      : [];
+  
+ 
+    window.currentGardenView = currentGardenView;
+    window.currentViewedGardenData = currentViewedGardenData;
+  
+    if (!currentGardenView.length) {
+      selectedFlowerId = null;
+      return;
+    }
+  
+    if (
+      selectedFlowerId !== null &&
+      currentGardenView.some(
+        (flower) => flower.id === selectedFlowerId
+      )
+    ) {
+      return;
+    }
+  
     selectedFlowerId = null;
-    return;
-  }
-
-  if (
-    selectedFlowerId !== null &&
-    currentGardenView.some((flower) => flower.id === selectedFlowerId)
-  ) {
-    return;
-  }
-
-  selectedFlowerId = null;
 }
 
 function applyMyGardenData(gardenData) {
@@ -102,16 +255,24 @@ function updateFriendInfo() {
 }
 
 function renderVisitRecords() {
-  const recordsDiv = document.getElementById("visitRecords");
+    const recordsDiv = document.getElementById("visitRecords");
+
   if (!recordsDiv) {
     return;
   }
 
-  const records = myGardenData ? myGardenData.visitRecords || [] : [];
+  const records = myGardenData
+    ? myGardenData.visitRecords || []
+    : [];
+
   recordsDiv.innerHTML = "";
 
   if (!records.length) {
-    recordsDiv.innerHTML = `<p class="empty-message">No visitors yet 🌱</p>`;
+    recordsDiv.innerHTML = `
+      <p class="empty-message">
+        No visitors yet 🌱
+      </p>
+    `;
     return;
   }
 
@@ -119,14 +280,57 @@ function renderVisitRecords() {
     const item = document.createElement("div");
     item.className = "visit-record-item";
 
-    item.innerHTML = `
-      <p><strong>${record.visitorAvatar} ${record.visitorName}</strong> ${record.action}</p>
-      <p>${new Date(record.createdAt).toLocaleString()}</p>
-    `;
+    const avatar = record.visitorAvatar || "🦋";
+    const name = record.visitorName || "Someone";
+    const action = record.action || "";
 
+    let actionText = action;
+
+    if (
+      action === "started visiting your garden" ||
+      action === "visit"
+    ) {
+      actionText = "started visiting your garden";
+    } else if (
+      action === "left your garden" ||
+      action === "leave"
+    ) {
+      actionText = "left your garden";
+    } else if (action === "support") {
+      actionText = "gave you support ×1";
+    } else if (action.startsWith("message:")) {
+      const messageText = action.slice("message:".length).trim();
+
+      actionText = messageText
+        ? `left a message: ${messageText}`
+        : "left a message";
+    }
+
+    const text = document.createElement("p");
+    text.className = "visit-record-text";
+
+    const visitorName = document.createElement("strong");
+    visitorName.textContent = `${avatar} ${name}`;
+
+    text.appendChild(visitorName);
+    text.appendChild(
+      document.createTextNode(` ${actionText}`)
+    );
+
+    const time = document.createElement("p");
+    time.className = "visit-record-time";
+
+    const createdAt = new Date(record.createdAt);
+
+    time.textContent = Number.isNaN(createdAt.getTime())
+      ? ""
+      : createdAt.toLocaleString();
+
+    item.appendChild(text);
+    item.appendChild(time);
     recordsDiv.appendChild(item);
   });
-}
+  }
 
 function renderHostVisitors(activeVisitors) {
   const gardenDiv = document.getElementById("garden");
@@ -143,6 +347,7 @@ function renderHostVisitors(activeVisitors) {
   activeVisitors.forEach((visitor) => {
     const el = document.createElement("div");
     el.className = "host-visitor";
+    el.dataset.visitorId = String(visitor.visitorId);
     el.textContent = visitor.avatar || "🦋";
     el.style.left = `${typeof visitor.x === "number" ? visitor.x : 0}px`;
     el.style.top = `${typeof visitor.y === "number" ? visitor.y : 0}px`;
@@ -243,14 +448,102 @@ async function refreshSocialPanels() {
   }
 }
 
+function flowerDataChanged(oldFlowers, newFlowers) {
+    if (!Array.isArray(oldFlowers) || !Array.isArray(newFlowers)) {
+      return true;
+    }
+  
+    if (oldFlowers.length !== newFlowers.length) {
+      return true;
+    }
+  
+    for (let i = 0; i < oldFlowers.length; i += 1) {
+      const oldFlower = oldFlowers[i];
+      const newFlower = newFlowers[i];
+  
+      if (String(oldFlower.id) !== String(newFlower.id)) {
+        return true;
+      }
+    }
+  
+    return false;
+  }
+
 function startPolling() {
     stopPolling();
   
     pollTimer = setInterval(async () => {
       try {
-        if (viewMode === "friend") {
-          const viewedGarden = await fetchGarden(currentVisitedFriendId);
-          applyViewedGardenData(viewedGarden);
+        const userId = getCurrentUserId();
+  
+        if (!userId) {
+          return;
+        }
+  
+        if (viewMode === "mine") {
+          const gardenData = await fetchGarden(userId);
+  
+          const shouldUpdateFlowers = flowerDataChanged(
+            currentGardenView,
+            gardenData.flowers || []
+          );
+  
+          applyMyGardenData(gardenData);
+  
+          if (shouldUpdateFlowers) {
+            applyViewedGardenData(gardenData);
+  
+            
+            renderGarden();
+            renderTodayFlower();
+          }
+  
+          
+          renderHostVisitors(
+            Array.isArray(gardenData.activeVisitors)
+              ? gardenData.activeVisitors
+              : []
+          );
+  
+          renderVisitRecords();
+          return;
+        }
+  
+        if (
+          viewMode === "friend" &&
+          currentVisitedFriendId
+        ) {
+          const viewedGarden = await fetchGarden(
+            currentVisitedFriendId
+          );
+  
+          const shouldUpdateFlowers = flowerDataChanged(
+            currentGardenView,
+            viewedGarden.flowers || []
+          );
+  
+          if (shouldUpdateFlowers) {
+            applyViewedGardenData(viewedGarden);
+  
+            renderGarden();
+            renderTodayFlower();
+  
+           
+            if (avatarEl) {
+              const gardenDiv =
+                document.getElementById("garden");
+  
+              if (
+                gardenDiv &&
+                avatarEl.parentNode !== gardenDiv
+              ) {
+                gardenDiv.appendChild(avatarEl);
+              }
+  
+              avatarEl.style.left = `${avatarX}px`;
+              avatarEl.style.top = `${avatarY}px`;
+            }
+          }
   
           if (typeof checkNearbyFlower === "function") {
             checkNearbyFlower();
@@ -303,6 +596,7 @@ async function loadMyGarden() {
   viewMode = "mine";
   currentVisitedFriendId = null;
   friendMode = false;
+  joinGardenRoom(getCurrentUserId());
 
   document.body.classList.remove("friend-mode");
   const friendSection = document.getElementById("friendSection");
@@ -353,6 +647,7 @@ async function openFriendGardenById(friendId) {
   viewMode = "friend";
   friendMode = true;
   selectedFlowerId = null;
+  joinGardenRoom(friendId);
 
   document.body.classList.add("friend-mode");
 
@@ -860,6 +1155,7 @@ function showAuthMode() {
 
   const checkin = document.querySelector(".checkin-section");
   if (checkin) checkin.style.display = "none";
+  
 }
 
 function showAppMode() {
