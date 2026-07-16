@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
@@ -50,7 +51,10 @@
           </div>
 
           <!-- LOGIN FORM -->
-          <div id="loginForm" class="auth-form">
+          <div
+            id="loginForm"
+            class="auth-form"
+          >
             <h3>Log In</h3>
 
             <label for="loginEmail">
@@ -325,7 +329,7 @@
           <div id="friendsList"></div>
         </section>
 
-        <!-- FRIEND GARDEN -->
+        <!-- FRIEND GARDEN CONTROLS -->
         <section id="friendSection">
           <h2>Garden Visiting</h2>
 
@@ -337,35 +341,11 @@
           </button>
         </section>
 
-        <!-- VISIT RECORDS -->
-        <section id="visitRecordsSection">
-          <h2>Visitor Records</h2>
-
-          <div id="visitRecords"></div>
-        </section>
-
-        <!-- FRIEND STATUS -->
-        <section
-          id="friendInfo"
-          style="display: none;"
-        >
-          <h2>Friend Status</h2>
-
-          <p id="friendMood">
-            Mood: Unknown
-          </p>
-
-          <p id="friendTodayFlower">
-            Today's flower: None
-          </p>
-        </section>
-
-        
-
       </div>
 
       <!-- RIGHT PANEL -->
       <div class="right-panel">
+
         <h2
           class="garden-title"
           id="gardenTitle"
@@ -373,6 +353,7 @@
           Your Garden
         </h2>
 
+        <!-- GARDEN SCENE -->
         <div
           id="garden-scene"
           class="garden-scene"
@@ -397,10 +378,113 @@
 
           <div class="frontgrass-right"></div>
         </div>
+
+        <!-- CONTENT BELOW GARDEN -->
+        <div class="below-garden-layout">
+
+          <!-- FLOWER CALENDAR -->
+          <section
+            id="todayFlower"
+            class="below-garden-card today-flower-panel flower-calendar-panel"
+          >
+            <div class="flower-calendar-header">
+              <button
+                id="previousMonthButton"
+                class="calendar-month-button"
+                type="button"
+                aria-label="Previous month"
+              >
+                ‹
+              </button>
+
+              <div class="flower-calendar-title">
+                <h2 id="calendarMonthTitle">
+                  Flower Calendar
+                </h2>
+
+                <p>
+                  Explore your garden through time
+                </p>
+              </div>
+
+              <button
+                id="nextMonthButton"
+                class="calendar-month-button"
+                type="button"
+                aria-label="Next month"
+              >
+                ›
+              </button>
+            </div>
+
+            <div
+              class="calendar-weekdays"
+              aria-hidden="true"
+            >
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+
+            <div
+              id="flowerCalendar"
+              class="flower-calendar"
+            ></div>
+
+            <div class="calendar-footer">
+              <p id="calendarHint">
+                Select a flower date to highlight it in the garden 🌸
+              </p>
+
+              <button
+                id="showAllFlowersButton"
+                class="show-all-flowers-button"
+                type="button"
+                style="display: none;"
+              >
+                Show All Flowers
+              </button>
+            </div>
+          </section>
+
+          <!-- FRIEND STATUS -->
+          <section
+            id="friendInfo"
+            class="below-garden-card friend-status-panel"
+            style="display: none;"
+          >
+            <h2>Friend Status</h2>
+
+            <p id="friendMood">
+              Mood: Unknown
+            </p>
+
+            <p id="friendTodayFlower">
+              Today's flower: None
+            </p>
+          </section>
+
+          <!-- VISITOR RECORDS -->
+          <section
+            id="visitRecordsSection"
+            class="below-garden-card visitor-records-panel"
+          >
+            <h2>Visitor Records</h2>
+
+            <div id="visitRecords"></div>
+          </section>
+
+        </div>
+
       </div>
 
     </div>
   </main>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="/login.js"></script>
   <script src="/visitors.js"></script>

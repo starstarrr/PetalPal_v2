@@ -13,6 +13,462 @@ const flowerMap = {
   stressed: "/assets/pink.png",
   default: "/assets/pink.png"
 };
+let displayedCalendarDate = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    1
+  );
+  
+  let selectedCalendarDateKey = null;
+  
+  function getFlowerDateValue(flower) {
+    return flower?.createdAt || flower?.date || null;
+  }
+  
+  function getDateKey(dateValue) {
+    if (!dateValue) {
+      return null;
+    }
+  
+    const date =
+      dateValue instanceof Date
+        ? dateValue
+        : new Date(dateValue);
+  
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+  
+    const year = date.getFullYear();
+  
+    const month = String(
+      date.getMonth() + 1
+    ).padStart(2, "0");
+  
+    const day = String(
+      date.getDate()
+    ).padStart(2, "0");
+  
+    return `${year}-${month}-${day}`;
+  }
+  
+  function formatCalendarDate(dateKey) {
+    const [year, month, day] =
+      dateKey.split("-").map(Number);
+  
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+      }
+    ).format(
+      new Date(year, month - 1, day)
+    );
+  }
+  
+  function getFlowersGroupedByDate() {
+    const groupedFlowers = {};
+  
+    const flowers =
+      Array.isArray(currentGardenView)
+        ? currentGardenView
+        : [];
+  
+    flowers.forEach((flower) => {
+      const dateKey = getDateKey(
+        getFlowerDateValue(flower)
+      );
+  
+      if (!dateKey) {
+        return;
+      }
+  
+      if (!groupedFlowers[dateKey]) {
+        groupedFlowers[dateKey] = [];
+      }
+  
+      groupedFlowers[dateKey].push(flower);
+    });
+  
+    return groupedFlowers;
+  }
+  
+  function applyCalendarFlowerHighlight() {
+    const gardenScene =
+      document.getElementById(
+        "garden-scene"
+      );
+  
+    if (!gardenScene) {
+      return;
+    }
+  
+    gardenScene
+      .querySelectorAll(
+        ".flower-card.calendar-flower-match"
+      )
+      .forEach((card) => {
+        card.classList.remove(
+          "calendar-flower-match"
+        );
+      });
+  
+    gardenScene.classList.remove(
+      "calendar-filter-active",
+      "calendar-no-match"
+    );
+  
+    if (!selectedCalendarDateKey) {
+      return;
+    }
+  
+    const matchingFlowerIds = new Set(
+      currentGardenView
+        .filter((flower) => {
+          return (
+            getDateKey(
+              getFlowerDateValue(flower)
+            ) === selectedCalendarDateKey
+          );
+        })
+        .map((flower) =>
+          String(flower.id)
+        )
+    );
+  
+    if (matchingFlowerIds.size === 0) {
+      gardenScene.classList.add(
+        "calendar-no-match"
+      );
+  
+      return;
+    }
+  
+    gardenScene.classList.add(
+      "calendar-filter-active"
+    );
+  
+    gardenScene
+      .querySelectorAll(".flower-card")
+      .forEach((card) => {
+        const flowerId =
+          card.dataset.flowerId ||
+          card.dataset.id;
+  
+        if (
+          matchingFlowerIds.has(
+            String(flowerId)
+          )
+        ) {
+          card.classList.add(
+            "calendar-flower-match"
+          );
+        }
+      });
+  }
+  
+  function clearCalendarFlowerHighlight(
+    rerenderCalendar = true
+  ) {
+    selectedCalendarDateKey = null;
+  
+    const gardenScene =
+      document.getElementById(
+        "garden-scene"
+      );
+  
+    if (gardenScene) {
+      gardenScene.classList.remove(
+        "calendar-filter-active",
+        "calendar-no-match"
+      );
+  
+      gardenScene
+        .querySelectorAll(
+          ".calendar-flower-match"
+        )
+        .forEach((card) => {
+          card.classList.remove(
+            "calendar-flower-match"
+          );
+        });
+    }
+  
+    if (rerenderCalendar) {
+      renderFlowerCalendar();
+    }
+  }
+  
+  function handleCalendarDateClick(
+    dateKey,
+    flowerCount
+  ) {
+    if (flowerCount === 0) {
+      return;
+    }
+  
+    if (
+      selectedCalendarDateKey === dateKey
+    ) {
+      clearCalendarFlowerHighlight();
+      return;
+    }
+  
+    selectedCalendarDateKey = dateKey;
+  
+    applyCalendarFlowerHighlight();
+    renderFlowerCalendar();
+  }
+  
+  function renderFlowerCalendar() {
+    const calendar =
+      document.getElementById(
+        "flowerCalendar"
+      );
+  
+    const monthTitle =
+      document.getElementById(
+        "calendarMonthTitle"
+      );
+  
+    if (!calendar || !monthTitle) {
+      return;
+    }
+  
+    const year =
+      displayedCalendarDate.getFullYear();
+  
+    const month =
+      displayedCalendarDate.getMonth();
+  
+    monthTitle.textContent =
+      new Intl.DateTimeFormat(
+        "en-US",
+        {
+          month: "long",
+          year: "numeric"
+        }
+      ).format(displayedCalendarDate);
+  
+    const flowersByDate =
+      getFlowersGroupedByDate();
+  
+    calendar.innerHTML = "";
+  
+    const firstWeekday =
+      new Date(
+        year,
+        month,
+        1
+      ).getDay();
+  
+    const daysInMonth =
+      new Date(
+        year,
+        month + 1,
+        0
+      ).getDate();
+  
+    for (
+      let index = 0;
+      index < firstWeekday;
+      index += 1
+    ) {
+      const emptyCell =
+        document.createElement("div");
+  
+      emptyCell.className =
+        "calendar-day calendar-day-empty";
+  
+      calendar.appendChild(emptyCell);
+    }
+  
+    for (
+      let day = 1;
+      day <= daysInMonth;
+      day += 1
+    ) {
+      const date = new Date(
+        year,
+        month,
+        day
+      );
+  
+      const dateKey = getDateKey(date);
+  
+      const flowersForDate =
+        flowersByDate[dateKey] || [];
+  
+      const flowerCount =
+        flowersForDate.length;
+  
+      const dayButton =
+        document.createElement("button");
+  
+      dayButton.type = "button";
+      dayButton.className =
+        "calendar-day";
+  
+      dayButton.dataset.date = dateKey;
+  
+      if (flowerCount > 0) {
+        dayButton.classList.add(
+          "calendar-day-has-flowers"
+        );
+  
+        dayButton.title =
+          `${flowerCount} ${
+            flowerCount === 1
+              ? "flower"
+              : "flowers"
+          } planted`;
+      } else {
+        dayButton.title =
+          "No flowers planted";
+      }
+  
+      if (
+        selectedCalendarDateKey === dateKey
+      ) {
+        dayButton.classList.add(
+          "calendar-day-selected"
+        );
+      }
+  
+      const dayNumber =
+        document.createElement("span");
+  
+      dayNumber.className =
+        "calendar-day-number";
+  
+      dayNumber.textContent =
+        String(day);
+  
+      dayButton.appendChild(dayNumber);
+  
+      if (flowerCount > 0) {
+        const flowerMarker =
+          document.createElement("span");
+  
+        flowerMarker.className =
+          "calendar-flower-marker";
+  
+        flowerMarker.textContent = "🌱";
+  
+        dayButton.appendChild(
+          flowerMarker
+        );
+      }
+  
+      dayButton.addEventListener(
+        "click",
+        () => {
+          handleCalendarDateClick(
+            dateKey,
+            flowerCount
+          );
+        }
+      );
+  
+      calendar.appendChild(dayButton);
+    }
+  
+    const previousButton =
+      document.getElementById(
+        "previousMonthButton"
+      );
+  
+    if (previousButton) {
+      previousButton.onclick = () => {
+        displayedCalendarDate =
+          new Date(
+            displayedCalendarDate
+              .getFullYear(),
+            displayedCalendarDate
+              .getMonth() - 1,
+            1
+          );
+  
+        clearCalendarFlowerHighlight(
+          false
+        );
+  
+        renderFlowerCalendar();
+      };
+    }
+  
+    const nextButton =
+      document.getElementById(
+        "nextMonthButton"
+      );
+  
+    if (nextButton) {
+      nextButton.onclick = () => {
+        displayedCalendarDate =
+          new Date(
+            displayedCalendarDate
+              .getFullYear(),
+            displayedCalendarDate
+              .getMonth() + 1,
+            1
+          );
+  
+        clearCalendarFlowerHighlight(
+          false
+        );
+  
+        renderFlowerCalendar();
+      };
+    }
+  
+    const showAllButton =
+      document.getElementById(
+        "showAllFlowersButton"
+      );
+  
+    if (showAllButton) {
+      showAllButton.onclick = () => {
+        clearCalendarFlowerHighlight();
+      };
+  
+      showAllButton.style.display =
+        selectedCalendarDateKey
+          ? "block"
+          : "none";
+    }
+  
+    const hint =
+      document.getElementById(
+        "calendarHint"
+      );
+  
+    if (hint) {
+      if (selectedCalendarDateKey) {
+        const count =
+          (
+            flowersByDate[
+              selectedCalendarDateKey
+            ] || []
+          ).length;
+  
+        hint.textContent =
+          `${count} ${
+            count === 1
+              ? "flower"
+              : "flowers"
+          } highlighted from ${
+            formatCalendarDate(
+              selectedCalendarDateKey
+            )
+          }`;
+      } else {
+        hint.textContent =
+          "Select a flower date to highlight it in the garden 🌸";
+      }
+    }
+  }
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -597,12 +1053,16 @@ function renderGarden() {
       const card =
         document.createElement("div");
 
-      card.className = "flower-card";
-      card.dataset.id =
-        String(flower.id);
+        card.className = "flower-card";
 
-      card.dataset.index =
-        String(index);
+        card.dataset.id =
+          String(flower.id);
+        
+        card.dataset.flowerId =
+          String(flower.id);
+        
+        card.dataset.index =
+          String(index);
 
       const messages =
         Array.isArray(flower.messages)
@@ -857,6 +1317,7 @@ function renderGarden() {
     gardenDiv,
     metrics
   );
+  applyCalendarFlowerHighlight();
 
   if (friendMode) {
     if (
@@ -885,208 +1346,8 @@ function renderGarden() {
 }
 
 function renderTodayFlower() {
-  const todayFlowerDiv =
-    document.getElementById(
-      "todayFlower"
-    );
-
-  if (!todayFlowerDiv) {
-    return;
+    renderFlowerCalendar();
   }
-
-  todayFlowerDiv.innerHTML =
-    "<h2>Today's Flower</h2>";
-
-  if (
-    !Array.isArray(currentGardenView) ||
-    currentGardenView.length === 0
-  ) {
-    todayFlowerDiv.insertAdjacentHTML(
-      "beforeend",
-      `
-        <p class="empty-message">
-          No flower yet today 🌱
-        </p>
-      `
-    );
-
-    return;
-  }
-
-  if (selectedFlowerId === null) {
-    todayFlowerDiv.insertAdjacentHTML(
-      "beforeend",
-      `
-        <p class="empty-message">
-          Click a flower to view and manage it 🌸
-        </p>
-      `
-    );
-
-    return;
-  }
-
-  const flower =
-    currentGardenView.find(
-      (item) =>
-        String(item.id) ===
-        String(selectedFlowerId)
-    ) || null;
-
-  if (!flower) {
-    selectedFlowerId = null;
-
-    todayFlowerDiv.insertAdjacentHTML(
-      "beforeend",
-      `
-        <p class="empty-message">
-          Click a flower to view and manage it 🌸
-        </p>
-      `
-    );
-
-    return;
-  }
-
-  const flowerIndex =
-    currentGardenView.findIndex(
-      (item) =>
-        String(item.id) ===
-        String(flower.id)
-    );
-
-  const messages =
-    Array.isArray(flower.messages)
-      ? flower.messages
-      : [];
-
-  const latestMessage =
-    messages.length > 0
-      ? messages[messages.length - 1].text
-      : "No message yet";
-
-  todayFlowerDiv.insertAdjacentHTML(
-    "beforeend",
-    `
-      <div class="today-flower-card">
-        <div class="today-flower-emoji">
-          ${flower.img || "🌸"}
-        </div>
-
-        <p>
-          <strong>
-            ${flower.name || "Flower"}
-          </strong>
-        </p>
-
-        <p>
-          ${flower.meaning || "Unknown"}
-        </p>
-
-        <p>
-          Mood:
-          ${flower.mood || "Unknown"}
-        </p>
-
-        <p>
-          Event:
-          ${
-            flower.event ||
-            "No event recorded"
-          }
-        </p>
-
-        <p>
-          Support:
-          <span
-            class="flower-support-count"
-            data-flower-id="${flower.id}"
-          >
-            ${Number(
-              flower.supportCount || 0
-            )}
-          </span>
-        </p>
-
-        <p>
-          Message:
-          <span
-            class="flower-latest-message"
-            data-flower-id="${flower.id}"
-          >
-            ${latestMessage}
-          </span>
-        </p>
-      </div>
-    `
-  );
-
-  const actions =
-    document.createElement("div");
-
-  actions.className = "today-actions";
-
-  // 自己的花园只显示删除
-  if (!friendMode) {
-    const deleteBtn =
-      document.createElement("button");
-
-    deleteBtn.type = "button";
-    deleteBtn.textContent =
-      "Delete 🗑️";
-
-    deleteBtn.addEventListener(
-      "click",
-      () => {
-        if (flowerIndex !== -1) {
-          deleteFlower(flowerIndex);
-        }
-      }
-    );
-
-    actions.appendChild(deleteBtn);
-  } else {
-    // 朋友花园显示支持和留言
-    const supportBtn =
-      document.createElement("button");
-
-    supportBtn.type = "button";
-    supportBtn.textContent =
-      "Support ✨";
-
-    const messageBtn =
-      document.createElement("button");
-
-    messageBtn.type = "button";
-    messageBtn.textContent =
-      "Leave Message 🏷️";
-
-    supportBtn.addEventListener(
-      "click",
-      () => {
-        if (flowerIndex !== -1) {
-          supportFlower(flowerIndex);
-        }
-      }
-    );
-
-    messageBtn.addEventListener(
-      "click",
-      () => {
-        if (flowerIndex !== -1) {
-          leaveMessage(flowerIndex);
-        }
-      }
-    );
-
-    actions.appendChild(supportBtn);
-    actions.appendChild(messageBtn);
-  }
-
-  if (actions.children.length > 0) {
-    todayFlowerDiv.appendChild(actions);
-  }
-}
 
 window.addEventListener(
   "resize",
