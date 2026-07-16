@@ -1,60 +1,207 @@
-# PetalPal
+# 🌸 PetalPal
 
-PetalPal is an interactive web app where users can record their daily mood by planting flowers in a shared digital garden. Each flower represents an emotion, and friends can visit one another’s gardens, move around as a visitor avatar, leave supportive messages, and send support to flowers.
+> **A Social Mood Garden Where Emotions Bloom into Flowers**
 
-## Features
+PetalPal is a full-stack social web application that transforms daily
+emotions into flowers in a personal virtual garden. Users can record
+their day, grow mood-based flowers, revisit memories through a calendar,
+and interact with friends in real time.
 
-### Daily mood check-in
-- Users can write about what happened today
-- Users can choose a mood manually or let the app detect a mood from the text
-- Submitting a check-in creates a flower in the user’s garden
+------------------------------------------------------------------------
 
-### Flower garden visualization
-- Different moods create different flower images
-- Flowers appear at fixed positions in the garden
-- Flower positions stay stable and do not overlap
-- Users can click their own flowers to view details and manage them
+## ✨ Features
 
-### Friend interaction
-- Users can add and remove friends
-- Users can visit a friend’s garden
-- While visiting, users can move their avatar by:
-  - clicking on empty space in the garden
-  - using the arrow keys
-- When the visitor gets close to a flower, its information appears
-- Visitors can leave a message or give support to that flower
+-   🌼 Daily mood check-in
+-   🌸 Automatic flower generation
+-   🗓️ Flower Calendar with date highlighting
+-   👥 Friend search and friend request workflow
+-   💌 Leave supportive messages on flowers
+-   ❤️ Support friends' flowers
+-   🦋 Real-time garden visits using Socket.IO
+-   📜 Visitor history
+-   🔐 Secure authentication with hashed passwords
+-   ☁️ Persistent PostgreSQL database
 
-### Visitor system
-- Active visitors can be seen in the host user’s garden
-- Visit records are saved so users can see who visited
+------------------------------------------------------------------------
 
-## Project Idea
+## 📸 Screenshots
 
-This project was designed as a calming, supportive social garden experience. Instead of logging emotions in a plain list, users “grow” their feelings into flowers. The garden becomes a visual diary, while friend visits add a small sense of connection and encouragement.
+Replace these placeholders with project screenshots.
 
-## Tech Stack
+  Login                          Garden
+  ------------------------------ -------------------------------
+  `docs/screenshots/login.png`   `docs/screenshots/garden.png`
 
-### Frontend
-- HTML
-- CSS
-- JavaScript
+  ---------------------------------------------------------------------------
+  Friend Requests                         Flower Calendar
+  --------------------------------------- -----------------------------------
+  `docs/screenshots/friend-request.png`   `docs/screenshots/calendar.png`
 
-### Backend
-- Node.js
-- Express
+  ---------------------------------------------------------------------------
 
-## Project Structure
+------------------------------------------------------------------------
 
-```text
-project/
+# 🏗️ System Architecture
+
+``` text
+ Browser
+ (HTML/CSS/JavaScript)
+          │
+          │ REST API + Socket.IO
+          ▼
+   Express.js Server
+          │
+          ▼
+      Prisma ORM
+          │
+          ▼
+     PostgreSQL
+```
+
+------------------------------------------------------------------------
+
+# ⚡ Real-Time Workflow
+
+``` text
+User A
+   │
+Send Friend Request
+   │
+Express API
+   │
+Store Request
+   │
+Socket.IO Event
+   │
+User B
+
+Accept Request
+
+↓
+
+Friendship Created
+
+↓
+
+Both Clients Updated
+```
+
+------------------------------------------------------------------------
+
+# 🗄️ Database Design
+
+``` text
+User
+├── Garden
+│    └── Flower
+│          └── Message
+├── Friendship
+├── FriendRequest
+└── VisitRecord
+```
+
+------------------------------------------------------------------------
+
+# 🛠️ Tech Stack
+
+  Layer             Technology
+  ----------------- -------------------------
+  Frontend          HTML5, CSS3, JavaScript
+  Backend           Node.js, Express
+  Database          PostgreSQL
+  ORM               Prisma
+  Real-time         Socket.IO
+  Authentication    bcrypt
+  Mood Analysis     natural.js
+  Deployment        Render
+  Version Control   Git & GitHub
+
+------------------------------------------------------------------------
+
+# 📂 Project Structure
+
+``` text
+PetalPal/
+├── prisma/
 ├── public/
-│   ├── assets/                # background, flower, and decoration images
-│   ├── index.html
-│   ├── style.css
 │   ├── main.js
+│   ├── login.js
+│   ├── friends.js
 │   ├── renderGarden.js
 │   ├── interactions.js
-│   └── ...
+│   ├── visitors.js
+│   ├── style.css
+│   └── index.html
 ├── server.js
 ├── package.json
 └── README.md
+```
+
+------------------------------------------------------------------------
+
+# 🚀 Getting Started
+
+``` bash
+git clone <repository-url>
+
+cd PetalPal
+
+npm install
+
+npx prisma generate
+
+npx prisma db push
+
+npm start
+```
+
+Open:
+
+``` text
+http://localhost:3000
+```
+
+------------------------------------------------------------------------
+
+# 🌍 Deployment
+
+PetalPal is deployed with:
+
+-   Render
+-   PostgreSQL
+-   Prisma ORM
+
+------------------------------------------------------------------------
+
+# ⭐ Engineering Highlights
+
+-   Designed a normalized PostgreSQL schema with Prisma ORM.
+-   Built RESTful APIs using Express.
+-   Implemented real-time synchronization with Socket.IO.
+-   Developed a friend request workflow with live updates.
+-   Implemented partial UI updates to reduce unnecessary rendering.
+-   Created an interactive flower calendar for memory exploration.
+-   Structured the application into reusable frontend modules.
+
+------------------------------------------------------------------------
+
+# 🔮 Future Improvements
+
+-   Docker support
+-   Jest unit testing
+-   Swagger API documentation
+-   Notification center
+-   Online presence indicators
+-   Mobile responsive optimization
+
+------------------------------------------------------------------------
+
+# 👩‍💻 Author
+
+**Xingran Ma**
+
+Computer Science Student, University of British Columbia
+
+------------------------------------------------------------------------
+
+If you found this project interesting, feel free to ⭐ the repository!
