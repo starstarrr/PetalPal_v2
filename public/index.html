@@ -30,7 +30,17 @@
 
         <!-- LOGIN / REGISTER -->
         <section id="authSection">
-          <h2>Welcome to PetalPal 🌸</h2>
+          <div class="auth-heading">
+            <span class="auth-heading-icon">🌸</span>
+
+            <div>
+              <p class="auth-eyebrow">WELCOME TO YOUR GARDEN</p>
+              <h2>Welcome to PetalPal</h2>
+              <p class="auth-subtitle">
+                Log in to continue growing your mood garden.
+              </p>
+            </div>
+          </div>
 
           <div class="auth-tabs">
             <button
@@ -55,7 +65,11 @@
             id="loginForm"
             class="auth-form"
           >
-            <h3>Log In</h3>
+            <h3>Welcome Back</h3>
+
+            <p class="auth-form-description">
+              Enter your account details to return to your garden.
+            </p>
 
             <label for="loginEmail">
               Email
@@ -98,7 +112,11 @@
             class="auth-form"
             style="display: none;"
           >
-            <h3>Create Account</h3>
+            <h3>Create Your Garden</h3>
+
+            <p class="auth-form-description">
+              Create an account and begin recording your daily blooms.
+            </p>
 
             <label for="registerName">
               Display Name
@@ -166,7 +184,7 @@
               id="registerBtn"
               type="button"
             >
-              Sign Up
+              Create My Garden
             </button>
 
             <p
@@ -346,6 +364,133 @@
       <!-- RIGHT PANEL -->
       <div class="right-panel">
 
+        <!-- LOGIN LANDING / NOTICE BOARD -->
+        <section
+          id="loginWelcomePanel"
+          class="login-welcome-panel"
+        >
+          <div class="login-welcome-hero">
+            <div class="welcome-hero-overlay"></div>
+
+            <div class="welcome-hero-content">
+              <span class="welcome-badge">
+                YOUR SOCIAL MOOD GARDEN
+              </span>
+
+              <h2>
+                Grow something beautiful from every feeling.
+              </h2>
+
+              <p>
+                Record your day, bloom a flower, revisit your
+                memories, and share kindness with friends.
+              </p>
+
+              <div class="welcome-feature-row">
+                <span>🌸 Daily mood flowers</span>
+                <span>🦋 Live garden visits</span>
+                <span>💌 Supportive messages</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice-board">
+            <div class="notice-board-header">
+              <div class="notice-board-icon">📌</div>
+
+              <div>
+                <p class="notice-board-eyebrow">GETTING STARTED</p>
+                <h2>PetalPal Notice Board</h2>
+                <p>
+                  A quick guide to growing and sharing your garden.
+                </p>
+              </div>
+            </div>
+
+            <article class="notice-card notice-welcome">
+              <span class="notice-label">WELCOME</span>
+              <h3>Let your emotions bloom 🌷</h3>
+              <p>
+                PetalPal turns your daily feelings into flowers,
+                creating a garden filled with memories over time.
+              </p>
+            </article>
+
+            <article class="notice-card">
+              <h3>How to use PetalPal</h3>
+
+              <div class="guide-step">
+                <span class="guide-number">1</span>
+                <div>
+                  <strong>Share your day</strong>
+                  <p>
+                    Write what happened and choose a mood, or let
+                    PetalPal detect one from your entry.
+                  </p>
+                </div>
+              </div>
+
+              <div class="guide-step">
+                <span class="guide-number">2</span>
+                <div>
+                  <strong>Bloom a flower</strong>
+                  <p>
+                    Your mood becomes a flower planted in your
+                    personal garden.
+                  </p>
+                </div>
+              </div>
+
+              <div class="guide-step">
+                <span class="guide-number">3</span>
+                <div>
+                  <strong>Visit your friends</strong>
+                  <p>
+                    Search for friends, enter their gardens, move
+                    around, send support, and leave kind messages.
+                  </p>
+                </div>
+              </div>
+
+              <div class="guide-step">
+                <span class="guide-number">4</span>
+                <div>
+                  <strong>Explore your memories</strong>
+                  <p>
+                    Use the flower calendar to highlight everything
+                    that bloomed on a particular day.
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            <article class="notice-card community-notice">
+              <div class="community-notice-icon">🌿</div>
+              <div>
+                <h3>Garden Reminder</h3>
+                <p>
+                  Be thoughtful when visiting other gardens.
+                  A little support can brighten someone’s day.
+                </p>
+              </div>
+            </article>
+
+            <article class="notice-card latest-update">
+              <div>
+                <span class="notice-label">NEW</span>
+                <h3>Flower Calendar</h3>
+                <p>
+                  Select a date to make that day’s flowers glow
+                  directly inside the garden.
+                </p>
+              </div>
+              <span class="latest-update-icon">🗓️</span>
+            </article>
+          </div>
+        </section>
+
+        <div id="gardenAppContent">
+
         <h2
           class="garden-title"
           id="gardenTitle"
@@ -480,6 +625,8 @@
 
         </div>
 
+        </div>
+
       </div>
 
     </div>
@@ -493,5 +640,67 @@
   <script src="/interactions.js"></script>
   <script src="/renderGarden.js"></script>
   <script src="/main.js"></script>
+
+  <script>
+    function syncPetalPalPageMode() {
+      const loginWelcomePanel =
+        document.getElementById("loginWelcomePanel");
+
+      const gardenAppContent =
+        document.getElementById("gardenAppContent");
+
+      const currentProfileText =
+        document.getElementById("currentProfileText");
+
+      if (
+        !loginWelcomePanel ||
+        !gardenAppContent ||
+        !currentProfileText
+      ) {
+        return;
+      }
+
+      const profileText =
+        currentProfileText.textContent
+          .trim()
+          .toLowerCase();
+
+      const isLoggedIn =
+        profileText !== "" &&
+        profileText !== "not logged in";
+
+      loginWelcomePanel.style.display =
+        isLoggedIn ? "none" : "grid";
+
+      gardenAppContent.style.display =
+        isLoggedIn ? "block" : "none";
+    }
+
+    window.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        syncPetalPalPageMode();
+
+        const currentProfileText =
+          document.getElementById("currentProfileText");
+
+        if (!currentProfileText) {
+          return;
+        }
+
+        const profileObserver =
+          new MutationObserver(syncPetalPalPageMode);
+
+        profileObserver.observe(
+          currentProfileText,
+          {
+            childList: true,
+            subtree: true,
+            characterData: true
+          }
+        );
+      }
+    );
+  </script>
 </body>
 </html>

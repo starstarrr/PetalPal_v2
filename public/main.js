@@ -171,7 +171,7 @@ function updateCurrentProfileText() {
   }
 
   if (!currentUserProfile) {
-    profileText.textContent = "Not selected";
+    profileText.textContent = "Not logged in";
     return;
   }
 
@@ -1136,9 +1136,21 @@ if (typeof window !== "undefined") {
 function showAuthMode() {
   const authSection = document.getElementById("authSection");
   const rightPanel = document.querySelector(".right-panel");
+const loginWelcomePanel =
+  document.getElementById("loginWelcomePanel");
+const gardenAppContent =
+  document.getElementById("gardenAppContent");
 
-  if (authSection) authSection.style.display = "block";
-  if (rightPanel) rightPanel.style.display = "none";
+if (authSection) authSection.style.display = "block";
+if (rightPanel) rightPanel.style.display = "block";
+
+if (loginWelcomePanel) {
+  loginWelcomePanel.style.display = "grid";
+}
+
+if (gardenAppContent) {
+  gardenAppContent.style.display = "none";
+}
 
   [
     "currentProfileSection",
@@ -1161,9 +1173,21 @@ function showAuthMode() {
 function showAppMode() {
   const authSection = document.getElementById("authSection");
   const rightPanel = document.querySelector(".right-panel");
+const loginWelcomePanel =
+  document.getElementById("loginWelcomePanel");
+const gardenAppContent =
+  document.getElementById("gardenAppContent");
 
-  if (authSection) authSection.style.display = "none";
-  if (rightPanel) rightPanel.style.display = "block";
+if (authSection) authSection.style.display = "none";
+if (rightPanel) rightPanel.style.display = "block";
+
+if (loginWelcomePanel) {
+  loginWelcomePanel.style.display = "none";
+}
+
+if (gardenAppContent) {
+  gardenAppContent.style.display = "block";
+}
 
   [
     "currentProfileSection",
@@ -1213,32 +1237,3 @@ function __getMainTestState() {
     currentUserProfile
   };
 }
-
-/*if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    updateGardenTitle,
-    updateCurrentProfileText,
-    getMyGarden,
-    getCurrentViewedUserId,
-    applyViewedGardenData,
-    applyMyGardenData,
-    updateFriendInfo,
-    renderVisitRecords,
-    renderHostVisitors,
-    showAuthMode,
-    showAppMode,
-    setupAddFriendSelectLock,
-    __setMainTestState,
-    __getMainTestState,
-    refreshSocialPanels,
-    startPolling,
-    stopPolling,
-    loadMyGarden,
-    showMyGarden,
-    setupGardenSwitchButtons,
-    setupSubmitButton,
-    //setupCreateUserButton,
-    setupAddFriendButton
-  };
-}
-*/
