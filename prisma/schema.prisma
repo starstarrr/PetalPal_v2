@@ -23,8 +23,12 @@ model User {
   flowers      Flower[]
   messages     Message[]
   visitRecords VisitRecord[]
-  friends      Friendship[] @relation("UserFriends")
-  friendOf     Friendship[] @relation("FriendOf")
+
+  friends  Friendship[] @relation("UserFriends")
+  friendOf Friendship[] @relation("FriendOf")
+
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
 }
 
 model Garden {
@@ -53,8 +57,8 @@ model Flower {
   userId   String
   gardenId String
 
-  user     User     @relation(fields: [userId], references: [id])
-  garden   Garden   @relation(fields: [gardenId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+  garden   Garden    @relation(fields: [gardenId], references: [id])
   messages Message[]
 }
 
@@ -92,8 +96,22 @@ model Friendship {
   friendId  String
   createdAt DateTime @default(now())
 
-  user   User @relation("UserFriends", fields: [userId], references: [id])
-  friend User @relation("FriendOf", fields: [friendId], references: [id])
+  user   User @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
 
   @@unique([userId, friendId])
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("SentFriendRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
 }

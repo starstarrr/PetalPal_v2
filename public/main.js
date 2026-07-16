@@ -8,6 +8,7 @@ let viewMode = "mine";
 let pollTimer = null;
 const POLL_INTERVAL = 3000;
 let isAddFriendSelectOpen = false;
+let friendsRenderVersion = 0;
 
 
 let selectedFlowerId = null;
@@ -133,6 +134,93 @@ socket.on("visit-record-added", (record) => {
 
 
   
+
+
+socket.on("friend-request-received", async () => {
+  if (!getCurrentUserId()) {
+    return;
+  }
+
+  try {
+    await renderFriendRequests();
+  } catch (err) {
+    console.error("Friend request refresh error:", err);
+  }
+});
+
+socket.on(
+  "friend-request-accepted",
+  async (data) => {
+    const currentUserId =
+      getCurrentUserId();
+
+    if (
+      !currentUserId ||
+      !data
+    ) {
+      return;
+    }
+
+    try {
+      await Promise.all([
+        renderFriendRequests(),
+        renderFriendsList()
+      ]);
+
+      const searchResults =
+        document.getElementById(
+          "friendSearchResults"
+        );
+
+      const searchMessage =
+        document.getElementById(
+          "friendSearchMessage"
+        );
+
+      const searchInput =
+        document.getElementById(
+          "friendSearchInput"
+        );
+
+      if (searchResults) {
+        searchResults.innerHTML = "";
+      }
+
+      if (searchInput) {
+        searchInput.value = "";
+      }
+
+      if (searchMessage) {
+        if (
+          String(currentUserId) ===
+          String(data.senderId)
+        ) {
+          searchMessage.textContent =
+            "Your friend request was accepted. You are now friends!";
+
+          searchMessage.style.color = "";
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Accepted request refresh error:",
+        err
+      );
+    }
+  }
+);
+
+socket.on("friend-request-rejected", async () => {
+  if (!getCurrentUserId()) {
+    return;
+  }
+
+  try {
+    await renderFriendRequests();
+  } catch (err) {
+    console.error("Rejected request refresh error:", err);
+  }
+});
 
 let joinedGardenOwnerId = null;
 
@@ -436,7 +524,10 @@ async function refreshSocialPanels() {
     return;
   }
 
-  await renderFriendsList();
+  await Promise.all([
+    renderFriendsList(),
+    renderFriendRequests()
+  ]);
 
   if (viewMode === "friend" && currentVisitedFriendId) {
     const friends = await fetchFriends(getCurrentUserId());
@@ -612,7 +703,10 @@ async function loadMyGarden() {
   activeFlowerId = null;
   selectedFlowerId = null;
 
-  await refreshMineOnly();
+  await Promise.all([
+    refreshMineOnly(),
+    renderFriendRequests()
+  ]);
 }
 
 async function showMyGarden() {
@@ -669,26 +763,351 @@ async function openFriendGardenById(friendId) {
   }
 }
 
-async function addFriend(friendId) {
-  const res = await fetch("/friends/add", {
+async function sendFriendRequest(receiverId) {
+  const res = await fetch("/friends/request", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      userId: getCurrentUserId(),
-      friendId
+      senderId: getCurrentUserId(),
+      receiverId
     })
   });
 
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || "Failed to add friend");
+    throw new Error(
+      data.error ||
+      "Failed to send friend request"
+    );
   }
 
   return data;
 }
+
+async function fetchFriendRequests() {
+  const userId = getCurrentUserId();
+
+  if (!userId) {
+    return {
+      incoming: [],
+      outgoing: []
+    };
+  }
+
+  const res = await fetch(
+    `/friends/requests/${encodeURIComponent(userId)}`
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data.error ||
+      "Failed to load friend requests"
+    );
+  }
+
+  return {
+    incoming: Array.isArray(data.incoming)
+      ? data.incoming
+      : [],
+    outgoing: Array.isArray(data.outgoing)
+      ? data.outgoing
+      : []
+  };
+}
+
+async function acceptFriendRequest(requestId) {
+  const res = await fetch(
+    `/friends/requests/${encodeURIComponent(requestId)}/accept`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        userId: getCurrentUserId()
+      })
+    }
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data.error ||
+      "Failed to accept friend request"
+    );
+  }
+
+  return data;
+}
+
+async function rejectFriendRequest(requestId) {
+  const res = await fetch(
+    `/friends/requests/${encodeURIComponent(requestId)}/reject`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        userId: getCurrentUserId()
+      })
+    }
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data.error ||
+      "Failed to decline friend request"
+    );
+  }
+
+  return data;
+}
+
+function createFriendRequestActionButton(text, className) {
+  const button = document.createElement("button");
+
+  button.type = "button";
+  button.className = className;
+  button.textContent = text;
+
+  return button;
+}
+
+async function renderFriendRequests() {
+  const incomingList =
+    document.getElementById("friendRequestsList");
+
+  const outgoingList =
+    document.getElementById("sentFriendRequestsList");
+
+  if (!incomingList || !outgoingList) {
+    return;
+  }
+
+  if (!getCurrentUserId()) {
+    incomingList.innerHTML = `
+      <p class="empty-message">
+        Log in to view requests
+      </p>
+    `;
+
+    outgoingList.innerHTML = "";
+    return;
+  }
+
+  incomingList.innerHTML = `
+    <p class="empty-message">
+      Loading requests...
+    </p>
+  `;
+
+  outgoingList.innerHTML = "";
+
+  try {
+    const { incoming, outgoing } =
+      await fetchFriendRequests();
+
+    incomingList.innerHTML = "";
+    outgoingList.innerHTML = "";
+
+    const incomingHeading =
+      document.createElement("h3");
+
+    incomingHeading.className =
+      "friend-request-subheading";
+
+    incomingHeading.textContent =
+      `Incoming (${incoming.length})`;
+
+    incomingList.appendChild(incomingHeading);
+
+    if (incoming.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-message";
+      empty.textContent =
+        "No incoming requests 🌱";
+      incomingList.appendChild(empty);
+    }
+
+    incoming.forEach((request) => {
+      const sender = request.sender || {};
+
+      const item = document.createElement("div");
+      item.className = "friend-request-item";
+
+      const info = document.createElement("div");
+      info.className = "friend-request-info";
+
+      const name = document.createElement("strong");
+      name.textContent =
+        `${sender.avatar || "🦋"} ${
+          sender.name || "PetalPal user"
+        }`;
+
+      const description =
+        document.createElement("span");
+
+      description.textContent =
+        " wants to be your friend.";
+
+      info.appendChild(name);
+      info.appendChild(description);
+
+      const actions = document.createElement("div");
+      actions.className = "friend-request-actions";
+
+      const acceptButton =
+        createFriendRequestActionButton(
+          "Accept",
+          "friend-request-button friend-request-accept"
+        );
+
+      const declineButton =
+        createFriendRequestActionButton(
+          "Decline",
+          "friend-request-button friend-request-decline"
+        );
+
+      acceptButton.addEventListener("click", async () => {
+        acceptButton.disabled = true;
+        declineButton.disabled = true;
+        acceptButton.textContent = "Accepting...";
+
+        try {
+          await acceptFriendRequest(request.id);
+
+          const senderName =
+            request.sender?.name ||
+            "This user";
+
+          setFriendSearchMessage(
+            `You accepted ${senderName}'s friend request. You are now friends!`
+          );
+
+          await Promise.all([
+            renderFriendRequests(),
+            renderFriendsList()
+          ]);
+        } catch (err) {
+          console.error(
+            "Accept friend request error:",
+            err
+          );
+
+          alert(
+            err.message ||
+            "Failed to accept request"
+          );
+
+          acceptButton.disabled = false;
+          declineButton.disabled = false;
+          acceptButton.textContent = "Accept";
+        }
+      });
+
+      declineButton.addEventListener("click", async () => {
+        acceptButton.disabled = true;
+        declineButton.disabled = true;
+        declineButton.textContent = "Declining...";
+
+        try {
+          await rejectFriendRequest(request.id);
+          await renderFriendRequests();
+        } catch (err) {
+          console.error(
+            "Decline friend request error:",
+            err
+          );
+
+          alert(
+            err.message ||
+            "Failed to decline request"
+          );
+
+          acceptButton.disabled = false;
+          declineButton.disabled = false;
+          declineButton.textContent = "Decline";
+        }
+      });
+
+      actions.appendChild(acceptButton);
+      actions.appendChild(declineButton);
+
+      item.appendChild(info);
+      item.appendChild(actions);
+
+      incomingList.appendChild(item);
+    });
+
+    const outgoingHeading =
+      document.createElement("h3");
+
+    outgoingHeading.className =
+      "friend-request-subheading";
+
+    outgoingHeading.textContent =
+      `Sent (${outgoing.length})`;
+
+    outgoingList.appendChild(outgoingHeading);
+
+    if (outgoing.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-message";
+      empty.textContent = "No outgoing requests";
+      outgoingList.appendChild(empty);
+    }
+
+    outgoing.forEach((request) => {
+      const receiver = request.receiver || {};
+
+      const item = document.createElement("div");
+      item.className =
+        "friend-request-item friend-request-sent";
+
+      const info = document.createElement("div");
+      info.className = "friend-request-info";
+
+      const name = document.createElement("strong");
+      name.textContent =
+        `${receiver.avatar || "🦋"} ${
+          receiver.name || "PetalPal user"
+        }`;
+
+      const status = document.createElement("span");
+      status.className = "friend-request-status";
+      status.textContent = "Request pending";
+
+      info.appendChild(name);
+      info.appendChild(status);
+      item.appendChild(info);
+
+      outgoingList.appendChild(item);
+    });
+  } catch (err) {
+    console.error(
+      "Render friend requests error:",
+      err
+    );
+
+    incomingList.innerHTML = `
+      <p class="empty-message">
+        Failed to load requests
+      </p>
+    `;
+
+    outgoingList.innerHTML = "";
+  }
+}
+
 
 async function removeFriend(friendId) {
   const res = await fetch("/friends/remove", {
@@ -714,78 +1133,198 @@ async function removeFriend(friendId) {
 
 
 async function renderFriendsList() {
-  const friendsListDiv = document.getElementById("friendsList");
+  const friendsListDiv =
+    document.getElementById("friendsList");
+
   if (!friendsListDiv) {
     return;
   }
 
-  friendsListDiv.innerHTML = "";
+  const renderVersion =
+    ++friendsRenderVersion;
 
   try {
-    const friends = await fetchFriends(getCurrentUserId());
+    const friends =
+      await fetchFriends(
+        getCurrentUserId()
+      );
 
-    if (!friends || friends.length === 0) {
-      friendsListDiv.innerHTML = `<p class="empty-message">No friends yet 🌱</p>`;
+    /*
+     * Ignore an older render if a newer one started
+     * while this request was still loading.
+     */
+    if (
+      renderVersion !==
+      friendsRenderVersion
+    ) {
       return;
     }
 
-    friends.forEach((friend) => {
-      const item = document.createElement("div");
-      item.className = "friend-item";
+    friendsListDiv.innerHTML = "";
 
-      const infoDiv = document.createElement("div");
-      infoDiv.innerHTML = `
-        <div class="friend-name">${friend.avatar} ${friend.name}</div>
+    /*
+     * Display each user only once even if duplicate
+     * friendship rows accidentally exist.
+     */
+    const uniqueFriends =
+      Array.from(
+        new Map(
+          (friends || []).map(
+            (friend) => [
+              String(friend.id),
+              friend
+            ]
+          )
+        ).values()
+      );
+
+    if (uniqueFriends.length === 0) {
+      friendsListDiv.innerHTML = `
+        <p class="empty-message">
+          No friends yet 🌱
+        </p>
       `;
 
-      const actionGroup = document.createElement("div");
-      actionGroup.style.display = "flex";
-      actionGroup.style.gap = "8px";
-      actionGroup.style.flexWrap = "wrap";
-      actionGroup.style.justifyContent = "flex-end";
+      return;
+    }
 
-      const openBtn = document.createElement("button");
-      openBtn.className = "friend-open-btn";
+    uniqueFriends.forEach((friend) => {
+      const item =
+        document.createElement("div");
+
+      item.className = "friend-item";
+
+      const infoDiv =
+        document.createElement("div");
+
+      const friendName =
+        document.createElement("div");
+
+      friendName.className =
+        "friend-name";
+
+      friendName.textContent =
+        `${friend.avatar || "🦋"} ${
+          friend.name
+        }`;
+
+      infoDiv.appendChild(
+        friendName
+      );
+
+      const actionGroup =
+        document.createElement("div");
+
+      actionGroup.style.display =
+        "flex";
+
+      actionGroup.style.gap =
+        "8px";
+
+      actionGroup.style.flexWrap =
+        "wrap";
+
+      actionGroup.style.justifyContent =
+        "flex-end";
+
+      const openBtn =
+        document.createElement("button");
+
+      openBtn.type = "button";
+      openBtn.className =
+        "friend-open-btn";
+
       openBtn.textContent = "Visit";
 
-      openBtn.addEventListener("click", async () => {
-        try {
-          await openFriendGardenById(friend.id);
-        } catch (err) {
-          console.error("Open friend garden error:", err);
-        }
-      });
-
-      const removeBtn = document.createElement("button");
-      removeBtn.className = "friend-open-btn";
-      removeBtn.textContent = "Remove";
-
-      removeBtn.addEventListener("click", async () => {
-        try {
-          await removeFriend(friend.id);
-
-          if (viewMode === "friend" && currentVisitedFriendId === friend.id) {
-            await loadMyGarden();
+      openBtn.addEventListener(
+        "click",
+        async () => {
+          try {
+            await openFriendGardenById(
+              friend.id
+            );
+          } catch (err) {
+            console.error(
+              "Open friend garden error:",
+              err
+            );
           }
-
-          //await renderAddFriendOptions();
-          await renderFriendsList();
-        } catch (err) {
-          console.error("Remove friend error:", err);
-          alert("Failed to remove friend");
         }
-      });
+      );
 
-      actionGroup.appendChild(openBtn);
-      actionGroup.appendChild(removeBtn);
+      const removeBtn =
+        document.createElement("button");
+
+      removeBtn.type = "button";
+      removeBtn.className =
+        "friend-open-btn";
+
+      removeBtn.textContent =
+        "Remove";
+
+      removeBtn.addEventListener(
+        "click",
+        async () => {
+          try {
+            await removeFriend(
+              friend.id
+            );
+
+            if (
+              viewMode === "friend" &&
+              currentVisitedFriendId ===
+                friend.id
+            ) {
+              await loadMyGarden();
+            }
+
+            await renderFriendsList();
+          } catch (err) {
+            console.error(
+              "Remove friend error:",
+              err
+            );
+
+            alert(
+              "Failed to remove friend"
+            );
+          }
+        }
+      );
+
+      actionGroup.appendChild(
+        openBtn
+      );
+
+      actionGroup.appendChild(
+        removeBtn
+      );
 
       item.appendChild(infoDiv);
       item.appendChild(actionGroup);
-      friendsListDiv.appendChild(item);
+
+      friendsListDiv.appendChild(
+        item
+      );
     });
   } catch (err) {
-    console.error("Friends render error:", err);
-    friendsListDiv.innerHTML = `<p class="empty-message">Failed to load friends</p>`;
+    if (
+      renderVersion !==
+      friendsRenderVersion
+    ) {
+      return;
+    }
+
+    console.error(
+      "Friends render error:",
+      err
+    );
+
+    friendsListDiv.innerHTML = `
+      <p class="empty-message">
+        Failed to load friends
+      </p>
+    `;
   }
 }
 
@@ -950,31 +1489,32 @@ function setFriendSearchMessage(message, isError = false) {
       const addButton = document.createElement("button");
       addButton.type = "button";
       addButton.className = "friend-open-btn";
-      addButton.textContent = "Add Friend";
+      addButton.textContent = "Send Request";
   
       addButton.addEventListener("click", async () => {
         addButton.disabled = true;
-        addButton.textContent = "Adding...";
+        addButton.textContent = "Sending...";
   
         try {
-          await addFriend(user.id);
+          await sendFriendRequest(user.id);
   
           setFriendSearchMessage(
-            `${user.name} added successfully!`
+            `You sent a friend request to ${user.name}.`
           );
   
-          item.remove();
-          await renderFriendsList();
+          addButton.textContent = "Request Sent";
+          addButton.disabled = true;
+          await renderFriendRequests();
         } catch (err) {
-          console.error("Add friend error:", err);
+          console.error("Send friend request error:", err);
   
           setFriendSearchMessage(
-            err.message || "Failed to add friend",
+            err.message || "Failed to send friend request",
             true
           );
   
           addButton.disabled = false;
-          addButton.textContent = "Add Friend";
+          addButton.textContent = "Send Request";
         }
       });
   
@@ -1119,7 +1659,11 @@ async function init() {
       showAppMode();
       updateCurrentProfileText();
   
-      await renderFriendsList();
+      await Promise.all([
+        renderFriendsList(),
+        renderFriendRequests()
+      ]);
+
       await loadMyGarden();
   
       startPolling();
@@ -1156,6 +1700,7 @@ if (gardenAppContent) {
     "currentProfileSection",
     "friendManageSection",
     "friendsListSection",
+    "friendRequestsSection",
     "friendSection",
     "visitRecordsSection",
     "visitorSection",
@@ -1193,6 +1738,7 @@ if (gardenAppContent) {
     "currentProfileSection",
     "friendManageSection",
     "friendsListSection",
+    "friendRequestsSection",
     "visitRecordsSection",
     "visitorSection",
     "todayFlower"
