@@ -24,22 +24,6 @@ and interact with friends in real time.
 
 ------------------------------------------------------------------------
 
-## 📸 Screenshots
-
-Replace these placeholders with project screenshots.
-
-  Login                          Garden
-  ------------------------------ -------------------------------
-  `docs/screenshots/login.png`   `docs/screenshots/garden.png`
-
-  ---------------------------------------------------------------------------
-  Friend Requests                         Flower Calendar
-  --------------------------------------- -----------------------------------
-  `docs/screenshots/friend-request.png`   `docs/screenshots/calendar.png`
-
-  ---------------------------------------------------------------------------
-
-------------------------------------------------------------------------
 
 # 🏗️ System Architecture
 
