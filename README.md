@@ -2,183 +2,225 @@
 
 > **A Social Mood Garden Where Emotions Bloom into Flowers**
 
-PetalPal is a full-stack social web application that transforms daily
-emotions into flowers in a personal virtual garden. Users can record
-their day, grow mood-based flowers, revisit memories through a calendar,
-and interact with friends in real time.
+PetalPal is a full-stack social web application that transforms daily emotions into flowers in a personal virtual garden. Users can record their day, grow mood-based flowers, revisit memories through an interactive calendar, and connect with friends through real-time social interactions.
 
-------------------------------------------------------------------------
+---
 
-## ✨ Features
+# ✨ Features
 
--   🌼 Daily mood check-in
--   🌸 Automatic flower generation
--   🗓️ Flower Calendar with date highlighting
--   👥 Friend search and friend request workflow
--   💌 Leave supportive messages on flowers
--   ❤️ Support friends' flowers
--   🦋 Real-time garden visits using Socket.IO
--   📜 Visitor history
--   🔐 Secure authentication with hashed passwords
--   ☁️ Persistent PostgreSQL database
+- 🌼 Daily mood check-in with AI mood analysis
+- 🌸 Automatic mood-based flower generation
+- 🗓️ Interactive flower calendar with date highlighting
+- 👥 Friend search and friend request workflow
+- 💌 Leave supportive messages on friends' flowers
+- ❤️ Support friends' flowers
+- 🦋 Real-time garden visits using Socket.IO
+- 📜 Live visitor records and activity history
+- 🔐 Secure authentication with hashed passwords
+- ☁️ Persistent PostgreSQL database
+- ⚛️ Modern React single-page application
 
-------------------------------------------------------------------------
-
+---
 
 # 🏗️ System Architecture
 
-``` text
- Browser
- (HTML/CSS/JavaScript)
-          │
-          │ REST API + Socket.IO
-          ▼
-   Express.js Server
-          │
-          ▼
-      Prisma ORM
-          │
-          ▼
-     PostgreSQL
+```text
+                 React Frontend
+               (Vite + React)
+                      │
+          REST API + Socket.IO
+                      │
+                      ▼
+             Express.js Server
+                      │
+                 Prisma ORM
+                      │
+                      ▼
+                 PostgreSQL
 ```
 
-------------------------------------------------------------------------
+---
 
 # ⚡ Real-Time Workflow
 
-``` text
+```text
 User A
    │
-Send Friend Request
+Visits Friend's Garden
    │
-Express API
+Socket.IO
    │
-Store Request
+Express Server
    │
-Socket.IO Event
+Broadcast Events
    │
 User B
 
-Accept Request
+↓
+
+Live Avatar Movement
 
 ↓
 
-Friendship Created
+Support / Message
 
 ↓
 
-Both Clients Updated
+Visitor Records Updated
+
+↓
+
+Both Clients Stay Synchronized
 ```
 
-------------------------------------------------------------------------
+---
 
 # 🗄️ Database Design
 
-``` text
+```text
 User
 ├── Garden
-│    └── Flower
-│          └── Message
+│   ├── Flower
+│   │    └── Message
+│   └── VisitRecord
 ├── Friendship
-├── FriendRequest
-└── VisitRecord
+└── FriendRequest
 ```
 
-------------------------------------------------------------------------
+---
 
 # 🛠️ Tech Stack
 
-  Layer             Technology
-  ----------------- -------------------------
-  Frontend          HTML5, CSS3, JavaScript
-  Backend           Node.js, Express
-  Database          PostgreSQL
-  ORM               Prisma
-  Real-time         Socket.IO
-  Authentication    bcrypt
-  Mood Analysis     natural.js
-  Deployment        Render
-  Version Control   Git & GitHub
+| Layer | Technology |
+|--------|------------|
+| Frontend | React, Vite, JavaScript, CSS |
+| Backend | Node.js, Express |
+| Database | PostgreSQL |
+| ORM | Prisma |
+| Real-Time | Socket.IO |
+| Authentication | bcrypt |
+| AI Mood Analysis | natural.js |
+| Deployment | Render |
+| Version Control | Git & GitHub |
 
-------------------------------------------------------------------------
+---
 
 # 📂 Project Structure
 
-``` text
+```text
 PetalPal/
+├── client/
+│   ├── src/
+│   │   ├── Auth/
+│   │   ├── Friends/
+│   │   ├── Garden/
+│   │   ├── Profile/
+│   │   ├── Visit/
+│   │   ├── App.jsx
+│   │   ├── api.js
+│   │   └── main.jsx
+│   └── public/
+│
 ├── prisma/
-├── public/
-│   ├── main.js
-│   ├── login.js
-│   ├── friends.js
-│   ├── renderGarden.js
-│   ├── interactions.js
-│   ├── visitors.js
-│   ├── style.css
-│   └── index.html
 ├── server.js
 ├── package.json
 └── README.md
 ```
 
-------------------------------------------------------------------------
+---
 
 # 🚀 Getting Started
 
-``` bash
+## Clone the repository
+
+```bash
 git clone <repository-url>
 
 cd PetalPal
+```
 
+## Install dependencies
+
+```bash
 npm install
 
+cd client
+npm install
+```
+
+## Generate Prisma Client
+
+```bash
 npx prisma generate
+```
 
+## Sync database
+
+```bash
 npx prisma db push
+```
 
+## Start backend
+
+```bash
 npm start
 ```
 
-Open:
+## Start frontend
 
-``` text
+```bash
+cd client
+
+npm run dev
+```
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+Backend:
+
+```text
 http://localhost:3000
 ```
 
-------------------------------------------------------------------------
+---
 
 # 🌍 Deployment
 
-PetalPal is deployed with:
+PetalPal is deployed using:
 
--   Render
--   PostgreSQL
--   Prisma ORM
+- Render
+- PostgreSQL
+- Prisma ORM
 
-------------------------------------------------------------------------
+---
 
 # ⭐ Engineering Highlights
 
--   Designed a normalized PostgreSQL schema with Prisma ORM.
--   Built RESTful APIs using Express.
--   Implemented real-time synchronization with Socket.IO.
--   Developed a friend request workflow with live updates.
--   Implemented partial UI updates to reduce unnecessary rendering.
--   Created an interactive flower calendar for memory exploration.
--   Structured the application into reusable frontend modules.
+- Designed a normalized PostgreSQL schema using Prisma ORM.
+- Built modular RESTful APIs with Express.
+- Developed a React component-based frontend architecture.
+- Implemented real-time synchronization using Socket.IO.
+- Designed a live friend request workflow with instant updates.
+- Optimized UI responsiveness with partial state updates.
+- Built an interactive calendar for exploring mood history.
+- Structured the application into reusable React components.
 
-------------------------------------------------------------------------
+---
 
 # 🔮 Future Improvements
 
--   Docker support
--   Jest unit testing
--   Swagger API documentation
--   Notification center
--   Online presence indicators
--   Mobile responsive optimization
+- Docker support
+- Jest unit testing
+- Swagger API documentation
+- Push notifications
+- Online presence indicators
+- Mobile responsive optimization
 
-------------------------------------------------------------------------
+---
 
 # 👩‍💻 Author
 
@@ -186,6 +228,6 @@ PetalPal is deployed with:
 
 Computer Science Student, University of British Columbia
 
-------------------------------------------------------------------------
+---
 
 If you found this project interesting, feel free to ⭐ the repository!
