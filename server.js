@@ -10,6 +10,7 @@ import { predictMood, loadMoodModel } from "./moodClassifier.js";
 import http from "http";
 import { Server } from "socket.io";
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -266,9 +267,6 @@ async function getGardenResponse(userId) {
   };
 }
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
 
 app.get("/users", async (req, res) => {
   try {
@@ -1901,6 +1899,29 @@ loadMoodModel()
   })
   .catch((err) => {
     console.error("Failed to load mood model:", err);
+  });
+  const clientDistPath = path.join(
+    __dirname,
+    "client",
+    "dist"
+  );
+  
+  app.use(express.static(clientDistPath));
+  
+  app.use((req, res, next) => {
+    if (
+      req.method !== "GET" ||
+      req.path.startsWith("/socket.io")
+    ) {
+      return next();
+    }
+  
+    res.sendFile(
+      path.join(
+        clientDistPath,
+        "index.html"
+      )
+    );
   });
 
 server.listen(PORT, "0.0.0.0", () => {
