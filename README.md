@@ -100,7 +100,7 @@ User
 | Real-Time | Socket.IO |
 | Authentication | bcrypt |
 | AI Mood Analysis | natural.js |
-| Deployment | Render |
+| Deployment | Render & Docker |
 | Version Control | Git & GitHub |
 
 ---
@@ -123,6 +123,9 @@ PetalPal/
 │
 ├── prisma/
 ├── server.js
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
 ├── package.json
 └── README.md
 ```
@@ -131,7 +134,9 @@ PetalPal/
 
 # 🚀 Getting Started
 
-## Clone the repository
+## Option 1 (Recommended): Run with Docker
+
+Clone the repository:
 
 ```bash
 git clone <repository-url>
@@ -139,34 +144,75 @@ git clone <repository-url>
 cd PetalPal
 ```
 
-## Install dependencies
+Create a `.env` file in the project root:
+
+```env
+DATABASE_URL=your_postgresql_connection_string
+```
+
+Build and start the application:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Stop the application:
+
+```bash
+docker compose down
+```
+
+For future runs:
+
+```bash
+docker compose up
+```
+
+---
+
+## Option 2: Run without Docker
+
+Install backend dependencies:
 
 ```bash
 npm install
-
-cd client
-npm install
 ```
 
-## Generate Prisma Client
+Install frontend dependencies:
+
+```bash
+cd client
+
+npm install
+
+cd ..
+```
+
+Generate Prisma Client:
 
 ```bash
 npx prisma generate
 ```
 
-## Sync database
+Sync the database:
 
 ```bash
 npx prisma db push
 ```
 
-## Start backend
+Start the backend:
 
 ```bash
 npm start
 ```
 
-## Start frontend
+In another terminal:
 
 ```bash
 cd client
@@ -188,13 +234,40 @@ http://localhost:3000
 
 ---
 
+# 🐳 Docker Architecture
+
+PetalPal uses a multi-stage Docker build.
+
+```text
+Stage 1
+React + Vite Build
+        │
+        ▼
+client/dist
+        │
+        ▼
+Stage 2
+Express Production Server
+        │
+        ├── REST API
+        ├── Socket.IO
+        └── React Static Files
+```
+
+The Express server serves both the backend API and the compiled React frontend from the same container.
+
+---
+
 # 🌍 Deployment
 
 PetalPal is deployed using:
 
 - Render
+- Docker
 - PostgreSQL
 - Prisma ORM
+
+The production Express server serves the compiled React application (`client/dist`) together with the REST API and Socket.IO endpoints under the same origin.
 
 ---
 
@@ -207,13 +280,14 @@ PetalPal is deployed using:
 - Designed a live friend request workflow with instant updates.
 - Optimized UI responsiveness with partial state updates.
 - Built an interactive calendar for exploring mood history.
+- Containerized the full-stack application using Docker with a multi-stage build.
+- Configured Express to serve the production React application.
 - Structured the application into reusable React components.
 
 ---
 
 # 🔮 Future Improvements
 
-- Docker support
 - Jest unit testing
 - Swagger API documentation
 - Push notifications
