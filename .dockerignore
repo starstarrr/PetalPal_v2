@@ -1,0 +1,14 @@
+node_modules
+client/node_modules
+
+.git
+.gitignore
+
+.env
+
+npm-debug.log
+
+client/dist
+
+Dockerfile
+docker-compose.yml
